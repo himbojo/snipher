@@ -2,6 +2,11 @@
 
 **Snipher** is a high-performance Go-based security auditing tool designed to inspect, validate, and audit TLS configurations. It provides deep visibility into certificate trust chains, protocol support (from legacy SSLv2 to modern TLS 1.3), and security posture.
 
+> [!NOTE]
+> **How do you say it?** 🗣️
+> Whether you pronounce it **"sni-fur"** (like a sniper) or the literal **"sniff-er"**, we won't judge. Just please, for the love of all things holy, **don't call it "snip-her"**.
+
+
 ## Features
 
 - **🛡️ Protocol Enumeration:** Parallel detection of TLS 1.0, 1.1, 1.2, and 1.3.
@@ -133,5 +138,12 @@ Test detection logic locally without external dependencies using our mock TLS se
    ./snipher localhost --port 4433
    ```
 
+## 🚀 Future Improvements
+
+- **Icon Legend**: Add a clear reference guide for all security and status icons (`✓`, `⊘`, `⚠`, `✗`).
+- **Enhanced Dossier Cards**: Improve the TUI formatting for vulnerability data by wrapping intel in stylized cards with boxed attributes for better scannability.
+- **Automated Remediation Advice**: Contextual tips based on detected flaws.
+
 ## License
 MIT
+
