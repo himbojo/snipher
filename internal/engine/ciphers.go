@@ -47,6 +47,8 @@ func AllModernCiphers() []uint16 {
 
 // GetAllCiphersForProtocol returns all possible cipher names for a given protocol version
 // sorted by strength (strongest first)
+// GetAllCiphersForProtocol returns all possible cipher names for a given protocol version
+// sorted by strength (strongest first)
 func GetAllCiphersForProtocol(version uint16) []string {
 	// TLS 1.3 has a fixed set of ciphers
 	if version == tls.VersionTLS13 {
@@ -57,27 +59,54 @@ func GetAllCiphersForProtocol(version uint16) []string {
 		}
 	}
 
-	// For TLS 1.0-1.2, return all known ciphers
 	var names []string
-	for _, suite := range tls.CipherSuites() {
-		// Filter by supported versions
-		for _, v := range suite.SupportedVersions {
-			if v == version {
-				names = append(names, suite.Name)
-				break
-			}
+
+	// Explicitly list ciphers for transparency and consistency
+	// Go doesn't support all ciphers, so these are the ones we can actively test for.
+	switch version {
+	case tls.VersionTLS12:
+		names = []string{
+			"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+			"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+			"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+			"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+			"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+			"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+			"TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
+			"TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+			"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256",
+			"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256",
+			"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
+			"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
+			"TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA",
+			"TLS_ECDHE_RSA_WITH_RC4_128_SHA",
+			"TLS_ECDHE_ECDSA_WITH_RC4_128_SHA",
+			"TLS_RSA_WITH_AES_256_GCM_SHA384",
+			"TLS_RSA_WITH_AES_128_GCM_SHA256",
+			"TLS_RSA_WITH_AES_256_CBC_SHA",
+			"TLS_RSA_WITH_AES_128_CBC_SHA256",
+			"TLS_RSA_WITH_AES_128_CBC_SHA",
+			"TLS_RSA_WITH_3DES_EDE_CBC_SHA",
+			"TLS_RSA_WITH_RC4_128_SHA",
 		}
-	}
-	for _, suite := range tls.InsecureCipherSuites() {
-		for _, v := range suite.SupportedVersions {
-			if v == version {
-				names = append(names, suite.Name)
-				break
-			}
+	case tls.VersionTLS10, tls.VersionTLS11:
+		names = []string{
+			"TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
+			"TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+			"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
+			"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
+			"TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA",
+			"TLS_ECDHE_RSA_WITH_RC4_128_SHA",
+			"TLS_ECDHE_ECDSA_WITH_RC4_128_SHA",
+			"TLS_RSA_WITH_AES_256_CBC_SHA",
+			"TLS_RSA_WITH_AES_128_CBC_SHA",
+			"TLS_RSA_WITH_3DES_EDE_CBC_SHA",
+			"TLS_RSA_WITH_RC4_128_SHA",
 		}
 	}
 
-	// Sort by strength
+	// Sort by strength (bubble sort maintains stability if we ordered them well above, but let's ensure it)
+	// Actually, the lists above are roughly ordered, but using the explicit sorter ensures consistency
 	sortCiphersByStrength(names)
 	return names
 }
