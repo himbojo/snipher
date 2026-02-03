@@ -38,6 +38,9 @@ var (
 			Bold(true).
 			Foreground(lipgloss.Color("#FF0000"))
 
+	styleSecure = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFFFFF"))
+
 	styleChain = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#7D56F4")).
 			Faint(true)
@@ -243,36 +246,46 @@ func RenderCapabilityTable(res models.ScanResult, verbose bool) {
 
 				cipherStyle := styleSubValue
 				statusIndicator := "✗"
+				severityLabel := ""
 
 				if isEnabled {
-					// Highlight weak ciphers even when enabled
+					// Categorize cipher security level
 					cipherLower := strings.ToLower(cipher)
-					if strings.Contains(cipherLower, "rc4") ||
-						strings.Contains(cipherLower, "des") ||
-						strings.Contains(cipherLower, "md5") ||
-						strings.Contains(cipherLower, "null") {
+					if strings.Contains(cipherLower, "null") || strings.Contains(cipherLower, "md5") {
+						// Critically weak ciphers
+						cipherStyle = styleCrit
+						severityLabel = " (CRITICAL)"
+					} else if strings.Contains(cipherLower, "rc4") || strings.Contains(cipherLower, "des") {
+						// Weak ciphers
 						cipherStyle = styleWarn
+						severityLabel = " (WARNING)"
 					} else {
-						cipherStyle = styleValue
+						// Secure ciphers
+						cipherStyle = styleSecure
 					}
 					statusIndicator = "✓"
 				}
 
-				cipherRow := fmt.Sprintf("  %s %s", statusIndicator, render(cipherStyle, cipher))
+				cipherRow := fmt.Sprintf("  %s %s%s", statusIndicator, render(cipherStyle, cipher), severityLabel)
 				rows = append(rows, cipherRow)
 			}
 		} else {
 			// Default mode: only show enabled ciphers
 			if p.Supported && len(p.Ciphers) > 0 {
 				for i, cipher := range p.Ciphers {
-					cipherStyle := styleSubValue
-					// Highlight weak ciphers
+					cipherStyle := styleSecure
+					severityLabel := ""
+
+					// Categorize cipher security level
 					cipherLower := strings.ToLower(cipher)
-					if strings.Contains(cipherLower, "rc4") ||
-						strings.Contains(cipherLower, "des") ||
-						strings.Contains(cipherLower, "md5") ||
-						strings.Contains(cipherLower, "null") {
+					if strings.Contains(cipherLower, "null") || strings.Contains(cipherLower, "md5") {
+						// Critically weak ciphers
+						cipherStyle = styleCrit
+						severityLabel = " (CRITICAL)"
+					} else if strings.Contains(cipherLower, "rc4") || strings.Contains(cipherLower, "des") {
+						// Weak ciphers
 						cipherStyle = styleWarn
+						severityLabel = " (WARNING)"
 					}
 
 					// Use └─ for last cipher, ├─ for others
@@ -281,7 +294,7 @@ func RenderCapabilityTable(res models.ScanResult, verbose bool) {
 						prefix = "└─"
 					}
 
-					cipherRow := fmt.Sprintf("  %s %s", prefix, render(cipherStyle, cipher))
+					cipherRow := fmt.Sprintf("  %s %s%s", prefix, render(cipherStyle, cipher), severityLabel)
 					rows = append(rows, cipherRow)
 				}
 			}
