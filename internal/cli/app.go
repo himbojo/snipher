@@ -55,6 +55,10 @@ func NewApp() *cli.App {
 				Value: 10 * time.Second,
 				Usage: "Maximum timeout for cipher check retries",
 			},
+			&cli.BoolFlag{
+				Name:  "cipher-list",
+				Usage: "Display supported ciphers that will be tested for each protocol",
+			},
 		},
 		UseShortOptionHandling: true,
 		Action:                 DefaultAction,

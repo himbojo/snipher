@@ -19,9 +19,14 @@ import (
 
 // DefaultAction is the handler for the main "snipher <target>" command
 func DefaultAction(c *cli.Context) error {
-	if c.NArg() < 1 {
-		cli.ShowAppHelp(c)
+	// Handle --cipher-list flag
+	if c.Bool("cipher-list") {
+		ui.RenderCipherList()
 		return nil
+	}
+
+	if c.NArg() < 1 {
+		return cli.Exit("Error: Target argument is required", 1)
 	}
 
 	target := c.Args().First()

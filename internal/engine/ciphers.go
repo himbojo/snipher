@@ -124,49 +124,36 @@ func sortCiphersByStrength(ciphers []string) {
 }
 
 // cipherStrength returns a numeric score for cipher strength (higher = stronger)
+// cipherStrength returns a numeric score for cipher strength based on the rubric:
+// Protocol Support (handled implicitly by list context): 30%
+// Key Exchange: 30% (ECDHE/DHE=100%, RSA=60%)
+// Cipher Strength: 40% (AES-GCM/ChaCha=100%, AES-CBC=80%, 3DES/RC4=0%)
 func cipherStrength(name string) int {
 	score := 0
 	nameLower := strings.ToLower(name)
 
-	// Key exchange strength
-	if strings.Contains(nameLower, "ecdhe") {
-		score += 1000 // ECDHE is strongest
-	} else if strings.Contains(nameLower, "dhe") {
-		score += 500 // DHE is good
-	}
-	// RSA-only key exchange gets 0
-
-	// Encryption algorithm strength
-	if strings.Contains(nameLower, "aes_256") {
-		score += 200
-	} else if strings.Contains(nameLower, "aes_128") {
-		score += 150
-	} else if strings.Contains(nameLower, "chacha20") {
-		score += 180
-	} else if strings.Contains(nameLower, "3des") {
-		score += 50 // Weak
-	} else if strings.Contains(nameLower, "rc4") {
-		score += 10 // Very weak
+	// Key Exchange (Max 30 points)
+	if strings.Contains(nameLower, "ecdhe") || strings.Contains(nameLower, "dhe") {
+		score += 30 // Forward Secrecy
+	} else if strings.Contains(nameLower, "rsa") {
+		score += 18 // No Forward Secrecy (60% of 30)
 	}
 
-	// Mode of operation
-	if strings.Contains(nameLower, "gcm") {
-		score += 100 // AEAD mode, strongest
-	} else if strings.Contains(nameLower, "poly1305") {
-		score += 100 // AEAD mode
+	// Cipher Strength (Max 40 points)
+	if strings.Contains(nameLower, "3des") || strings.Contains(nameLower, "rc4") {
+		score += 0 // Failure (0%) - Check this FIRST to override CBC/GCM matches
+	} else if strings.Contains(nameLower, "gcm") || strings.Contains(nameLower, "chacha20") || strings.Contains(nameLower, "poly1305") {
+		score += 40 // AEAD (100% of 40)
 	} else if strings.Contains(nameLower, "cbc") {
-		score += 30 // CBC is weaker
+		score += 32 // CBC Penalty (-20% of 40 -> 32)
 	}
 
-	// Hash function
-	if strings.Contains(nameLower, "sha384") {
-		score += 20
-	} else if strings.Contains(nameLower, "sha256") {
-		score += 15
-	} else if strings.Contains(nameLower, "sha") {
-		score += 10
-	} else if strings.Contains(nameLower, "md5") {
-		score += 1 // Very weak
+	// Tie Breakers (Bit Strength & ECDSA Preference)
+	if strings.Contains(nameLower, "aes_256") || strings.Contains(nameLower, "chacha20") {
+		score += 5
+	}
+	if strings.Contains(nameLower, "ecdsa") {
+		score += 1 // Prefer ECDSA over RSA in ties
 	}
 
 	return score
