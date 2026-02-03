@@ -11,6 +11,15 @@ func NewApp() *cli.App {
 	return &cli.App{
 		Name:  "snipher",
 		Usage: "A rapid security tool for SSL/TLS inspection",
+		Description: `EXAMPLES:
+   # Standard scan
+   snipher google.com
+
+   # Verbose mode (show all supported/unsupported ciphers)
+   snipher google.com --verbose
+
+   # Scan custom port with JSON output
+   snipher localhost --port 8443 --json`,
 		Flags: []cli.Flag{
 			&cli.IntFlag{
 				Name:    "port",

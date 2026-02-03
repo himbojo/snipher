@@ -51,6 +51,9 @@ go build -o snipher.exe ./cmd/snipher
 
 # JSON output for pipelines
 ./snipher google.com --json
+
+# Scan slow servers with adaptive timeouts
+./snipher 3des.badssl.com --min-timeout 500ms --max-timeout 5s
 ```
 
 ### Flags

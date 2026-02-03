@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"snipher/internal/engine"
 	"snipher/internal/models"
 	"snipher/internal/ui"
+	"strings"
 
 	"github.com/urfave/cli/v2"
 )
@@ -15,10 +17,27 @@ import (
 // DefaultAction is the handler for the main "snipher <target>" command
 func DefaultAction(c *cli.Context) error {
 	if c.NArg() < 1 {
-		return fmt.Errorf("missing target argument")
+		cli.ShowAppHelp(c)
+		return nil
 	}
 
 	target := c.Args().First()
+
+	// UX: Validate input - if it looks like a URL, fail gracefully
+	if strings.Contains(target, "://") || strings.Contains(target, "/") {
+		// Try to parse it to give a better suggestion
+		cleanTarget := target
+		if u, err := url.Parse(target); err == nil && u.Host != "" {
+			cleanTarget = u.Host
+		} else {
+			// Fallback cleaning
+			cleanTarget = strings.TrimPrefix(cleanTarget, "https://")
+			cleanTarget = strings.TrimPrefix(cleanTarget, "http://")
+			cleanTarget = strings.Split(cleanTarget, "/")[0]
+		}
+
+		return fmt.Errorf("invalid target format '%s'. Did you mean '%s'?\n   Target must be a hostname or IP (e.g., google.com), not a URL.", target, cleanTarget)
+	}
 	port := c.Int("port")
 	isJSON := c.Bool("json")
 	minTimeout := c.Duration("min-timeout")

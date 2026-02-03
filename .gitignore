@@ -36,10 +36,3 @@ pip-delete-this-directory.txt
 # OS generated files
 .DS_Store
 Thumbs.db
-
-# BMAD artifacts
-.gemini
-.agent
-.claude
-_bmad/
-# Keeping _bmad-output as it contains project planning docs
