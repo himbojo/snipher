@@ -195,6 +195,7 @@ func (s *StdScanner) checkProtocols(ctx context.Context, target string, port int
 				InsecureSkipVerify: true,
 				MinVersion:         version,
 				MaxVersion:         version,
+				CipherSuites:       AllModernCiphers(), // Include all ciphers for initial check
 			}
 
 			conn, err := tls.DialWithDialer(dialer, "tcp", address, conf)
@@ -225,63 +226,31 @@ func (s *StdScanner) enumerateCiphers(target string, port int, version uint16) [
 	address := net.JoinHostPort(target, fmt.Sprintf("%d", port))
 	var supported []string
 
-	// Initial list of ciphers to try
-	remaining := AllModernCiphers()
+	// Brute-force: Try every known cipher individually
+	allCiphers := AllModernCiphers()
 
-	// We'll cap the attempts to avoid infinite loops or excessive connections
-	maxAttempts := 50
-
-	for i := 0; i < maxAttempts && len(remaining) > 0; i++ {
-		dialer := &net.Dialer{Timeout: 2 * time.Second}
+	for _, cipherID := range allCiphers {
+		dialer := &net.Dialer{Timeout: 2 * time.Second} // Reliable timeout for individual checks
 		conf := &tls.Config{
 			ServerName:         target,
 			InsecureSkipVerify: true,
 			MinVersion:         version,
 			MaxVersion:         version,
-			CipherSuites:       remaining,
+			CipherSuites:       []uint16{cipherID}, // Check ONLY this cipher
 		}
 
 		conn, err := tls.DialWithDialer(dialer, "tcp", address, conf)
-		if err != nil {
-			// No more ciphers supported from the remaining list
-			break
-		}
+		if err == nil {
+			// Handshake succeeded!
+			state := conn.ConnectionState()
+			suiteName := GetCipherSuiteName(state.CipherSuite)
 
-		// Found one!
-		state := conn.ConnectionState()
-		suiteID := state.CipherSuite
-		suiteName := GetCipherSuiteName(suiteID)
-
-		// Check if we already have this cipher (dedup)
-		alreadyFound := false
-		for _, existing := range supported {
-			if existing == suiteName {
-				alreadyFound = true
-				break
+			// Double check it matches what we asked for (sanity check)
+			if state.CipherSuite == cipherID {
+				supported = append(supported, suiteName)
 			}
+			conn.Close()
 		}
-
-		if !alreadyFound {
-			supported = append(supported, suiteName)
-		}
-		conn.Close()
-
-		// Remove the found suite from the list and try again
-		var next []uint16
-		found := false
-		for _, id := range remaining {
-			if id == suiteID {
-				found = true
-				continue
-			}
-			next = append(next, id)
-		}
-
-		if !found {
-			// This shouldn't really happen if Dial was successful
-			break
-		}
-		remaining = next
 	}
 
 	// Sort by strength before returning
