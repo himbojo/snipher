@@ -12,23 +12,33 @@ import (
 )
 
 var (
+	// Neon Palette
+	colorCyan    = lipgloss.Color("#00FFFF")
+	colorMagenta = lipgloss.Color("#FF00FF")
+	colorLime    = lipgloss.Color("#00FF00")
+	colorRed     = lipgloss.Color("#FF0000")
+	colorWhite   = lipgloss.Color("#FFFFFF")
+	colorDim     = lipgloss.Color("#444444")
+
 	styleTitle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#FAFAFA")).
-			Background(lipgloss.Color("#7D56F4")).
-			Padding(0, 1).
-			MarginBottom(1)
+			Foreground(colorCyan).
+			Border(lipgloss.DoubleBorder(), false, false, true, false).
+			BorderForeground(colorCyan).
+			MarginBottom(1).
+			Padding(0, 1)
 
 	styleLabel = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#888888")).
-			Width(12)
+			Foreground(colorMagenta).
+			Width(14).
+			Bold(true)
 
 	styleValue = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#FFFFFF"))
+			Foreground(colorWhite)
 
 	styleSubValue = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#AAAAAA"))
+			Foreground(colorCyan)
 
 	styleWarn = lipgloss.NewStyle().
 			Bold(true).
@@ -36,18 +46,18 @@ var (
 
 	styleCrit = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#FF0000"))
+			Foreground(colorRed)
 
 	styleSecure = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF"))
+			Foreground(colorLime)
 
 	styleChain = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#7D56F4")).
-			Faint(true)
+			Foreground(colorMagenta).
+			Bold(true)
 
 	styleCard = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#7D56F4")).
+			Border(lipgloss.DoubleBorder()).
+			BorderForeground(colorCyan).
 			Padding(1, 2).
 			Margin(1, 0)
 )
@@ -60,44 +70,72 @@ func render(style lipgloss.Style, text string) string {
 	return style.Render(text)
 }
 
-// RenderVitalsCard displays a summary of the connection and target status
-func RenderVitalsCard(res models.ScanResult, showSans bool) {
-	title := render(styleTitle, "VITALS CARD")
+// RenderTargetIntelligence displays a summary of the connection and target status
+func RenderTargetIntelligence(res models.ScanResult, showSans bool) {
+	title := render(styleTitle, "TARGET INTELLIGENCE")
 
 	// Max width for text content within the card
 	const maxTextWidth = 60
 	const indent = "  "
 
-	ipRow := fmt.Sprintf("%s %s", render(styleLabel, "IP:"), render(styleValue, res.IP))
-	targetRow := fmt.Sprintf("%s %s", render(styleLabel, "Target:"), render(styleValue, res.Target))
-	portRow := fmt.Sprintf("%s %d", render(styleLabel, "Port:"), res.Port)
-	latencyRow := fmt.Sprintf("%s %s", render(styleLabel, "Latency:"), render(styleValue, res.Latency.String()))
+	ipRow := fmt.Sprintf("%s %s", render(styleLabel, "HOST IP"), render(styleValue, res.IP))
+	targetRow := fmt.Sprintf("%s %s", render(styleLabel, "TARGET HOST"), render(styleValue, res.Target))
+	portRow := fmt.Sprintf("%s %d", render(styleLabel, "TARGET PORT"), res.Port)
+	latencyRow := fmt.Sprintf("%s %s", render(styleLabel, "LATENCY"), render(styleValue, res.Latency.String()))
 
-	// Certificate Info Section
-	// Remove width constraint for header to prevent colon wrapping
-	certHeader := styleLabel.Copy().Width(0).Render("Certificates:")
-	if IsCI() {
-		certHeader = "Certificates:"
+	rows := []string{
+		targetRow,
+		ipRow,
+		portRow,
+		latencyRow,
 	}
 
-	// Indented Attributes
-	// Wrap Subject (CN)
+	content := lipgloss.JoinVertical(lipgloss.Left, rows...)
+
+	// Apply card styling only if not in CI mode
+	output := lipgloss.JoinVertical(lipgloss.Left, title, content)
+	if !IsCI() {
+		output = styleCard.Render(output)
+	} else {
+		// In CI mode, add simple border
+		output = fmt.Sprintf("\n%s\n%s\n%s\n", strings.Repeat("=", 50), output, strings.Repeat("=", 50))
+	}
+
+	fmt.Println(output)
+}
+
+// RenderCertificateIdentity displays certificate chain and validity info
+func RenderCertificateIdentity(res models.ScanResult, showSans bool) {
+	styleTitle.SetString("CERTIFICATE IDENTITY")
+	title := render(styleTitle, "CERTIFICATE IDENTITY")
+
+	const maxTextWidth = 60
+	const indent = "  "
+
+	// Certificate Info Section
 	wrappedSubject := res.Subject
 	if !IsCI() {
 		wrappedSubject = lipgloss.NewStyle().Width(maxTextWidth).Render(res.Subject)
 	}
-	cnRow := fmt.Sprintf("%s%s %s", indent, render(styleLabel, "CN:"), render(styleValue, wrappedSubject))
+	cnRow := fmt.Sprintf("%s %s", render(styleLabel, "COMMON NAME"), render(styleValue, wrappedSubject))
 
-	serialRow := fmt.Sprintf("%s%s %s", indent, render(styleLabel, "Serial:"), render(styleValue, res.SerialNumber))
+	serialRow := fmt.Sprintf("%s %s", render(styleLabel, "SERIAL NUM"), render(styleValue, res.SerialNumber))
 
-	sans := ""
+	rows := []string{cnRow, serialRow}
+
 	if showSans && len(res.DNSNames) > 0 {
-		sansList := fmt.Sprintf("%v", res.DNSNames)
-		wrappedSans := sansList
-		if !IsCI() {
-			wrappedSans = lipgloss.NewStyle().Width(maxTextWidth).Render(sansList)
+		sansHeader := render(styleLabel, "SANs")
+		rows = append(rows, sansHeader)
+
+		for _, san := range res.DNSNames {
+			wrappedSan := san
+			if !IsCI() {
+				// Truncate or wrap if too long (optional, keeping simple for now)
+			}
+			rows = append(rows, fmt.Sprintf("%s%s", "    ", render(styleSubValue, wrappedSan)))
 		}
-		sans = fmt.Sprintf("%s%s %s", indent, render(styleLabel, "SANs:"), render(styleSubValue, wrappedSans))
+	} else if showSans {
+		rows = append(rows, fmt.Sprintf("%s %s", render(styleLabel, "SANs"), render(styleSubValue, "(None)")))
 	}
 
 	expiryStr := res.NotAfter.Format("2006-01-02")
@@ -110,37 +148,41 @@ func RenderVitalsCard(res models.ScanResult, showSans bool) {
 		expiryStyle = styleWarn
 	}
 
-	expiryRow := fmt.Sprintf("%s%s %s", indent, render(styleLabel, "Expires:"), render(expiryStyle, expiryStr))
+	expiryRow := fmt.Sprintf("%s %s", render(styleLabel, "EXPIRES"), render(expiryStyle, expiryStr))
 
-	statusStr := "Trusted"
-	statusStyle := styleValue
+	statusStr := "TRUSTED"
+	statusStyle := styleSecure
 	if daysRemaining < 0 {
 		statusStr = "EXPIRED"
 		statusStyle = styleCrit
 	} else if !res.IsTrusted {
-		statusStr = "Untrusted"
+		statusStr = "UNTRUSTED"
 		statusStyle = styleCrit
 	}
-	statusRow := fmt.Sprintf("%s%s %s", indent, render(styleLabel, "Status:"), render(statusStyle, statusStr))
+	statusRow := fmt.Sprintf("%s %s", render(styleLabel, "STATUS"), render(statusStyle, statusStr))
 
 	// Trust Chain Visualization
-	chainHeader := fmt.Sprintf("%s%s", indent, render(styleLabel, "Chain:"))
+	chainHeader := fmt.Sprintf("\n%s", render(styleLabel.Copy().Width(0).Foreground(colorCyan).Underline(true), "CERTIFICATE CHAIN"))
+	if IsCI() {
+		chainHeader = "\nCERTIFICATE CHAIN"
+	}
+
 	chainRows := []string{chainHeader}
 	for i, c := range res.Chain {
-		prefix := "    ├─"
+		prefix := "  ├─"
 		if i == len(res.Chain)-1 {
-			prefix = "    └─"
+			prefix = "  └─"
 		}
 		if i == 0 {
-			prefix = "    ● "
+			prefix = "  ● "
 		}
 
 		cStyle := styleSubValue
 		// Include Serial Number in parentheses for the chain
-		label := fmt.Sprintf("%s (%s)", c.Subject, c.SerialNumber)
+		label := fmt.Sprintf("%s", c.Subject)
 
 		if c.IsAnchor {
-			label = fmt.Sprintf("%s (ANCHOR)", label)
+			label = fmt.Sprintf("%s [ANCHOR]", label)
 			cStyle = styleValue // Bold/White for anchor
 		}
 
@@ -155,26 +197,13 @@ func RenderVitalsCard(res models.ScanResult, showSans bool) {
 			if k == 0 {
 				chainRows = append(chainRows, fmt.Sprintf("%s%s", render(styleChain, prefix), render(cStyle, line)))
 			} else {
-				nodeIndent := "      "
+				nodeIndent := "    "
 				chainRows = append(chainRows, fmt.Sprintf("%s%s", nodeIndent, render(cStyle, line)))
 			}
 		}
 	}
 
-	rows := []string{
-		targetRow,
-		ipRow,
-		portRow,
-		latencyRow,
-		"",
-		certHeader,
-		cnRow,
-		serialRow,
-	}
-	if sans != "" {
-		rows = append(rows, sans)
-	}
-	rows = append(rows, expiryRow, statusRow, "")
+	rows = append(rows, "", expiryRow, statusRow)
 	rows = append(rows, chainRows...)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, rows...)
@@ -191,9 +220,9 @@ func RenderVitalsCard(res models.ScanResult, showSans bool) {
 	fmt.Println(output)
 }
 
-// RenderCapabilityTable displays the supported protocols in a table-like format
-func RenderCapabilityTable(res models.ScanResult, verbose bool) {
-	title := render(styleTitle, "CAPABILITY TABLE")
+// RenderProtocolMatrix displays the supported protocols in a table-like format
+func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
+	title := render(styleTitle, "PROTOCOL MATRIX")
 
 	headerCol1 := render(styleLabel, "PROTOCOL")
 	headerCol2 := render(styleLabel, "STATUS")
@@ -206,25 +235,28 @@ func RenderCapabilityTable(res models.ScanResult, verbose bool) {
 		header = fmt.Sprintf("%-15s %s", "PROTOCOL", "STATUS")
 	}
 
-	rows := []string{header, render(styleChain, strings.Repeat("─", 30))}
+	rows := []string{header, render(styleChain, strings.Repeat("═", 40))}
 	if IsCI() {
-		rows = []string{header, strings.Repeat("-", 30)}
+		rows = []string{header, strings.Repeat("=", 40)}
 	}
 
 	for _, p := range res.Protocols {
-		status := render(styleValue, "Enabled")
+		status := render(styleSecure, "SECURE")
 		if !p.Supported {
-			status = render(styleSubValue, "Disabled")
+			status = render(styleSubValue.Copy().Faint(true), "DISABLED")
+		} else if strings.Contains(p.Name, "SSL") || p.Name == "TLS 1.0" || p.Name == "TLS 1.1" {
+			// Mark old protocols as WARNING even if enabled (technically they are insecure)
+			status = render(styleWarn, "WEAK")
 		}
 
 		row := lipgloss.JoinHorizontal(lipgloss.Left,
-			lipgloss.NewStyle().Width(15).Render(p.Name),
+			lipgloss.NewStyle().Width(15).Foreground(colorWhite).Render(p.Name),
 			status,
 		)
 		if IsCI() {
-			statusText := "Enabled"
+			statusText := "SECURE"
 			if !p.Supported {
-				statusText = "Disabled"
+				statusText = "DISABLED"
 			}
 			row = fmt.Sprintf("%-15s %s", p.Name, statusText)
 		}
@@ -254,11 +286,11 @@ func RenderCapabilityTable(res models.ScanResult, verbose bool) {
 					if strings.Contains(cipherLower, "null") || strings.Contains(cipherLower, "md5") {
 						// Critically weak ciphers
 						cipherStyle = styleCrit
-						severityLabel = " (CRITICAL)"
+						severityLabel = " [CRITICAL]"
 					} else if strings.Contains(cipherLower, "rc4") || strings.Contains(cipherLower, "des") {
 						// Weak ciphers
 						cipherStyle = styleWarn
-						severityLabel = " (WARNING)"
+						severityLabel = " [WARNING]"
 					} else {
 						// Secure ciphers
 						cipherStyle = styleSecure
@@ -281,11 +313,11 @@ func RenderCapabilityTable(res models.ScanResult, verbose bool) {
 					if strings.Contains(cipherLower, "null") || strings.Contains(cipherLower, "md5") {
 						// Critically weak ciphers
 						cipherStyle = styleCrit
-						severityLabel = " (CRITICAL)"
+						severityLabel = " [CRITICAL]"
 					} else if strings.Contains(cipherLower, "rc4") || strings.Contains(cipherLower, "des") {
 						// Weak ciphers
 						cipherStyle = styleWarn
-						severityLabel = " (WARNING)"
+						severityLabel = " [WARNING]"
 					}
 
 					// Use └─ for last cipher, ├─ for others
@@ -294,7 +326,7 @@ func RenderCapabilityTable(res models.ScanResult, verbose bool) {
 						prefix = "└─"
 					}
 
-					cipherRow := fmt.Sprintf("  %s %s%s", prefix, render(cipherStyle, cipher), severityLabel)
+					cipherRow := fmt.Sprintf("  %s %s%s", render(styleChain, prefix), render(cipherStyle, cipher), severityLabel)
 					rows = append(rows, cipherRow)
 				}
 			}

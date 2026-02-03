@@ -134,8 +134,9 @@ func DefaultAction(c *cli.Context) error {
 		fmt.Println(string(b))
 	} else {
 		// Render final output
-		ui.RenderVitalsCard(res, c.Bool("sans"))
-		ui.RenderCapabilityTable(res, c.Bool("verbose"))
+		ui.RenderTargetIntelligence(res, c.Bool("sans"))
+		ui.RenderCertificateIdentity(res, c.Bool("sans"))
+		ui.RenderProtocolMatrix(res, c.Bool("verbose"))
 	}
 
 	// Check for critical issues using centralized logic

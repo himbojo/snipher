@@ -27,9 +27,9 @@ type ProgressModel struct {
 }
 
 var (
-	textStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Render
-	spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Render // Green
+	textStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FFFF")).Render // Cyan
+	spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF00FF"))        // Magenta
+	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Render // Lime
 )
 
 // NewProgressModel creates a new progress model
