@@ -1,0 +1,45 @@
+# Created by Antigravity for Go Project
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# GoReleaser
+dist/
+
+# Build artifacts
+bin/
+snipher.exe
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# BMAD artifacts
+.gemini
+.agent
+.claude
+_bmad/
+# Keeping _bmad-output as it contains project planning docs

@@ -1,0 +1,304 @@
+package engine
+
+import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
+	"net"
+	"os"
+	"snipher/internal/models"
+	"sync"
+	"time"
+)
+
+// StdScanner implements the Scanner interface using standard Go crypto/tls and net packages
+type StdScanner struct{}
+
+// NewStdScanner creates a new instance of StdScanner
+func NewStdScanner() *StdScanner {
+	return &StdScanner{}
+}
+
+// Scan performs a basic TCP connectivity check and TLS certificate extraction
+func (s *StdScanner) Scan(ctx context.Context, target string, port int, caBundlePath string) (models.ScanResult, error) {
+	result := models.ScanResult{
+		Target:    target,
+		Port:      port,
+		Timestamp: time.Now(),
+	}
+
+	// 1. DNS Resolution
+	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", target)
+	if err != nil {
+		return result, fmt.Errorf("DNS resolution failed: %w", err)
+	}
+	if len(ips) == 0 {
+		return result, fmt.Errorf("no IP addresses found for target: %s", target)
+	}
+	result.IP = ips[0].String()
+
+	// 2. TLS Handshake & Connectivity Check
+	address := net.JoinHostPort(result.IP, fmt.Sprintf("%d", port))
+	start := time.Now()
+
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+
+	// We use InsecureSkipVerify: true to ensure we get the PeerCertificates
+	// even if validation fails. We will manually verify them afterwards.
+	conf := &tls.Config{
+		ServerName:         target,
+		InsecureSkipVerify: true,
+	}
+
+	conn, err := tls.DialWithDialer(dialer, "tcp", address, conf)
+	if err != nil {
+		// If primary handshake fails, we still want to try protocol enumeration
+		// and IP resolution info. We'll store the error for potential reporting.
+		result.Error = err
+	} else {
+		defer conn.Close()
+		result.Latency = time.Since(start)
+
+		// 3. Extract & Validate Certificate Info
+		state := conn.ConnectionState()
+		if len(state.PeerCertificates) > 0 {
+			leaf := state.PeerCertificates[0]
+			result.SerialNumber = leaf.SerialNumber.String()
+			result.NotAfter = leaf.NotAfter
+			result.Issuer = leaf.Issuer.CommonName
+			result.Subject = leaf.Subject.CommonName
+			result.DNSNames = leaf.DNSNames
+
+			// Setup Verification Options
+			opts := x509.VerifyOptions{
+				DNSName:       target,
+				Intermediates: x509.NewCertPool(),
+			}
+			for _, c := range state.PeerCertificates[1:] {
+				opts.Intermediates.AddCert(c)
+			}
+
+			// Handle Custom CA Bundle
+			if caBundlePath != "" {
+				caData, err := os.ReadFile(caBundlePath)
+				if err != nil {
+					return result, fmt.Errorf("failed to read CA bundle at %s: %w", caBundlePath, err)
+				}
+				roots := x509.NewCertPool()
+				if ok := roots.AppendCertsFromPEM(caData); !ok {
+					return result, fmt.Errorf("failed to parse CA bundle at %s: invalid PEM", caBundlePath)
+				}
+				opts.Roots = roots
+			}
+
+			verifiedChains, verifyErr := leaf.Verify(opts)
+			result.IsTrusted = (verifyErr == nil)
+
+			// If verification failed due to time (expiry), try a "time-agnostic" check
+			// by using the certificate's own validity period to see if the CHAIN is trusted.
+			if verifyErr != nil && !result.IsTrusted {
+				// Check if we can verify by setting time back into the validity range
+				agnosticOpts := opts
+				if time.Now().After(leaf.NotAfter) {
+					agnosticOpts.CurrentTime = leaf.NotAfter.Add(-1 * time.Second)
+				} else if time.Now().Before(leaf.NotBefore) {
+					agnosticOpts.CurrentTime = leaf.NotBefore.Add(1 * time.Second)
+				}
+
+				agnosticChains, agnosticErr := leaf.Verify(agnosticOpts)
+				if agnosticErr == nil {
+					// The chain is trusted, even if the cert is currently expired
+					verifiedChains = agnosticChains
+				}
+			}
+
+			// Identify the trust anchor
+			var anchorRoot *x509.Certificate
+			if len(verifiedChains) > 0 {
+				chain := verifiedChains[0]
+				anchorRoot = chain[len(chain)-1]
+			}
+
+			// Map full chain
+			for _, cert := range state.PeerCertificates {
+				summary := models.CertSummary{
+					Subject:      cert.Subject.CommonName,
+					Issuer:       cert.Issuer.CommonName,
+					SerialNumber: cert.SerialNumber.String(),
+					NotAfter:     cert.NotAfter,
+					IsTrusted:    result.IsTrusted,
+				}
+
+				if anchorRoot != nil && cert.Equal(anchorRoot) {
+					summary.IsAnchor = true
+				}
+
+				result.Chain = append(result.Chain, summary)
+			}
+
+			// Add anchor root if missing
+			if anchorRoot != nil {
+				found := false
+				for _, c := range result.Chain {
+					if c.IsAnchor {
+						found = true
+						break
+					}
+				}
+				if !found {
+					result.Chain = append(result.Chain, models.CertSummary{
+						Subject:      anchorRoot.Subject.CommonName,
+						Issuer:       anchorRoot.Issuer.CommonName,
+						SerialNumber: anchorRoot.SerialNumber.String(),
+						NotAfter:     anchorRoot.NotAfter,
+						IsTrusted:    true,
+						IsAnchor:     true,
+					})
+				}
+			}
+		}
+	}
+
+	// 4. Protocol Enumeration (Parallel)
+	legacy := s.checkLegacyProtocols(ctx, target, port)
+	modern := s.checkProtocols(ctx, target, port)
+
+	result.Protocols = append(legacy, modern...)
+
+	return result, nil
+}
+
+func (s *StdScanner) checkProtocols(ctx context.Context, target string, port int) []models.ProtocolDetails {
+	versions := []struct {
+		val  uint16
+		name string
+	}{
+		{tls.VersionTLS10, "TLS 1.0"},
+		{tls.VersionTLS11, "TLS 1.1"},
+		{tls.VersionTLS12, "TLS 1.2"},
+		{tls.VersionTLS13, "TLS 1.3"},
+	}
+
+	results := make([]models.ProtocolDetails, len(versions))
+	var wg sync.WaitGroup
+	address := net.JoinHostPort(target, fmt.Sprintf("%d", port))
+
+	for i, v := range versions {
+		wg.Add(1)
+		go func(idx int, version uint16, name string) {
+			defer wg.Done()
+
+			dialer := &net.Dialer{Timeout: 2 * time.Second}
+			conf := &tls.Config{
+				ServerName:         target,
+				InsecureSkipVerify: true,
+				MinVersion:         version,
+				MaxVersion:         version,
+			}
+
+			conn, err := tls.DialWithDialer(dialer, "tcp", address, conf)
+			if err == nil {
+				conn.Close()
+				results[idx] = models.ProtocolDetails{
+					Name:      name,
+					Supported: true,
+					Ciphers:   s.enumerateCiphers(target, port, version),
+				}
+			} else {
+				results[idx] = models.ProtocolDetails{Name: name, Supported: false}
+			}
+		}(i, v.val, v.name)
+	}
+
+	wg.Wait()
+	return results
+}
+
+// enumerateCiphers identifies all supported ciphers for a specific protocol version
+func (s *StdScanner) enumerateCiphers(target string, port int, version uint16) []string {
+	// TLS 1.3 requires special handling
+	if version == tls.VersionTLS13 {
+		return s.enumerateTLS13Ciphers(target, port)
+	}
+
+	address := net.JoinHostPort(target, fmt.Sprintf("%d", port))
+	var supported []string
+
+	// Initial list of ciphers to try
+	remaining := AllModernCiphers()
+
+	// We'll cap the attempts to avoid infinite loops or excessive connections
+	maxAttempts := 50
+
+	for i := 0; i < maxAttempts && len(remaining) > 0; i++ {
+		dialer := &net.Dialer{Timeout: 2 * time.Second}
+		conf := &tls.Config{
+			ServerName:         target,
+			InsecureSkipVerify: true,
+			MinVersion:         version,
+			MaxVersion:         version,
+			CipherSuites:       remaining,
+		}
+
+		conn, err := tls.DialWithDialer(dialer, "tcp", address, conf)
+		if err != nil {
+			// No more ciphers supported from the remaining list
+			break
+		}
+
+		// Found one!
+		state := conn.ConnectionState()
+		suiteID := state.CipherSuite
+		suiteName := GetCipherSuiteName(suiteID)
+
+		// Check if we already have this cipher (dedup)
+		alreadyFound := false
+		for _, existing := range supported {
+			if existing == suiteName {
+				alreadyFound = true
+				break
+			}
+		}
+
+		if !alreadyFound {
+			supported = append(supported, suiteName)
+		}
+		conn.Close()
+
+		// Remove the found suite from the list and try again
+		var next []uint16
+		found := false
+		for _, id := range remaining {
+			if id == suiteID {
+				found = true
+				continue
+			}
+			next = append(next, id)
+		}
+
+		if !found {
+			// This shouldn't really happen if Dial was successful
+			break
+		}
+		remaining = next
+	}
+
+	// Sort by strength before returning
+	sortCiphersByStrength(supported)
+	return supported
+}
+
+// enumerateTLS13Ciphers handles TLS 1.3 cipher enumeration
+// TLS 1.3 ciphers cannot be restricted via CipherSuites in Go's crypto/tls
+// So we return all standard TLS 1.3 ciphers as potentially supported
+func (s *StdScanner) enumerateTLS13Ciphers(target string, port int) []string {
+	// For TLS 1.3, Go's crypto/tls doesn't allow client-side cipher restriction
+	// The server always chooses from its supported set
+	// We'll return the standard TLS 1.3 cipher suites in strength order
+	return []string{
+		"TLS_AES_256_GCM_SHA384",       // Strongest
+		"TLS_CHACHA20_POLY1305_SHA256", // Strong
+		"TLS_AES_128_GCM_SHA256",       // Good
+	}
+}
