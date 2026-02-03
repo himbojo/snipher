@@ -17,6 +17,7 @@ var (
 	colorMagenta = lipgloss.Color("#FF00FF")
 	colorLime    = lipgloss.Color("#00FF00")
 	colorRed     = lipgloss.Color("#FF0000")
+	colorOrange  = lipgloss.Color("#FF8800") // Better accessibility than Yellow
 	colorWhite   = lipgloss.Color("#FFFFFF")
 	colorDim     = lipgloss.Color("#444444")
 
@@ -42,7 +43,7 @@ var (
 
 	styleWarn = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#FFFF00"))
+			Foreground(colorOrange)
 
 	styleCrit = lipgloss.NewStyle().
 			Bold(true).
@@ -150,13 +151,13 @@ func RenderCertificateIdentity(res models.ScanResult, showSans bool) {
 
 	expiryRow := fmt.Sprintf("%s %s", render(styleLabel, "EXPIRES"), render(expiryStyle, expiryStr))
 
-	statusStr := "TRUSTED"
+	statusStr := "🔒 TRUSTED"
 	statusStyle := styleSecure
 	if daysRemaining < 0 {
-		statusStr = "EXPIRED"
+		statusStr = "⚠ EXPIRED"
 		statusStyle = styleCrit
 	} else if !res.IsTrusted {
-		statusStr = "UNTRUSTED"
+		statusStr = "✗ UNTRUSTED"
 		statusStyle = styleCrit
 	}
 	statusRow := fmt.Sprintf("%s %s", render(styleLabel, "STATUS"), render(statusStyle, statusStr))
@@ -240,13 +241,22 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 		rows = []string{header, strings.Repeat("=", 40)}
 	}
 
-	for _, p := range res.Protocols {
-		status := render(styleSecure, "SECURE")
+	for i, p := range res.Protocols {
+		// Add separator between protocols (but not before the first one)
+		if i > 0 {
+			sep := render(lipgloss.NewStyle().Foreground(colorDim), strings.Repeat("─", 40))
+			if IsCI() {
+				sep = strings.Repeat("-", 40)
+			}
+			rows = append(rows, sep)
+		}
+
+		status := render(styleSecure, "🔒 SECURE")
 		if !p.Supported {
-			status = render(styleSubValue.Copy().Faint(true), "DISABLED")
+			status = render(styleSubValue.Copy().Faint(true), "─ DISABLED")
 		} else if strings.Contains(p.Name, "SSL") || p.Name == "TLS 1.0" || p.Name == "TLS 1.1" {
 			// Mark old protocols as WARNING even if enabled (technically they are insecure)
-			status = render(styleWarn, "WEAK")
+			status = render(styleWarn, "🔓 WEAK")
 		}
 
 		row := lipgloss.JoinHorizontal(lipgloss.Left,
@@ -281,21 +291,24 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 				severityLabel := ""
 
 				if isEnabled {
+					statusIndicator = "✓"
+
 					// Categorize cipher security level
 					cipherLower := strings.ToLower(cipher)
 					if strings.Contains(cipherLower, "null") || strings.Contains(cipherLower, "md5") {
 						// Critically weak ciphers
 						cipherStyle = styleCrit
 						severityLabel = " [CRITICAL]"
+						statusIndicator = "✗"
 					} else if strings.Contains(cipherLower, "rc4") || strings.Contains(cipherLower, "des") {
 						// Weak ciphers
 						cipherStyle = styleWarn
 						severityLabel = " [WARNING]"
+						statusIndicator = "⚠"
 					} else {
 						// Secure ciphers
 						cipherStyle = styleSecure
 					}
-					statusIndicator = "✓"
 				}
 
 				cipherRow := fmt.Sprintf("  %s %s%s", statusIndicator, render(cipherStyle, cipher), severityLabel)
@@ -307,6 +320,7 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 				for i, cipher := range p.Ciphers {
 					cipherStyle := styleSecure
 					severityLabel := ""
+					statusIndicator := "✓"
 
 					// Categorize cipher security level
 					cipherLower := strings.ToLower(cipher)
@@ -314,10 +328,12 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 						// Critically weak ciphers
 						cipherStyle = styleCrit
 						severityLabel = " [CRITICAL]"
+						statusIndicator = "✗"
 					} else if strings.Contains(cipherLower, "rc4") || strings.Contains(cipherLower, "des") {
 						// Weak ciphers
 						cipherStyle = styleWarn
 						severityLabel = " [WARNING]"
+						statusIndicator = "⚠"
 					}
 
 					// Use └─ for last cipher, ├─ for others
@@ -326,7 +342,7 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 						prefix = "└─"
 					}
 
-					cipherRow := fmt.Sprintf("  %s %s%s", render(styleChain, prefix), render(cipherStyle, cipher), severityLabel)
+					cipherRow := fmt.Sprintf("  %s %s %s%s", render(styleChain, prefix), statusIndicator, render(cipherStyle, cipher), severityLabel)
 					rows = append(rows, cipherRow)
 				}
 			}
