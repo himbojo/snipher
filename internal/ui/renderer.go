@@ -49,6 +49,12 @@ var (
 			Bold(true).
 			Foreground(colorRed)
 
+	styleVulnTag = lipgloss.NewStyle().
+			Background(colorRed).
+			Foreground(colorWhite).
+			Bold(true).
+			Padding(0, 1)
+
 	styleSecure = lipgloss.NewStyle().
 			Foreground(colorLime)
 
@@ -221,25 +227,54 @@ func RenderCertificateIdentity(res models.ScanResult, showSans bool) {
 	fmt.Println(output)
 }
 
+// GetCipherDisplayStatus returns the security icon and style for a cipher
+func GetCipherDisplayStatus(cipher string) (string, lipgloss.Style) {
+	lower := strings.ToLower(cipher)
+
+	// CRITICAL: Broken or Dangerous ciphers
+	if strings.Contains(lower, "null") || strings.Contains(lower, "md5") ||
+		strings.Contains(lower, "rc4") || strings.Contains(lower, "3des") ||
+		strings.Contains(lower, "des") || strings.Contains(lower, "export") ||
+		strings.Contains(lower, "anon") {
+		return "⊘", styleCrit // Use circle with line (⊘) for critical/broken
+	}
+
+	// WARNING: Weak ciphers (CBC)
+	if strings.Contains(lower, "cbc") {
+		return "⚠", styleWarn
+	}
+
+	// SECURE
+	return "", styleSecure // Empty string for secure ciphers (no issues)
+}
+
 // RenderProtocolMatrix displays the supported protocols in a table-like format
 func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 	title := render(styleTitle, "PROTOCOL MATRIX")
+	if IsCI() {
+		fmt.Println("PROTOCOL MATRIX")
+		fmt.Println("===============")
+		fmt.Println()
+	}
 
-	headerCol1 := render(styleLabel, "PROTOCOL")
-	headerCol2 := render(styleLabel, "STATUS")
-
+	var rows []string
 	header := lipgloss.JoinHorizontal(lipgloss.Left,
-		lipgloss.NewStyle().Width(15).Render(headerCol1),
-		headerCol2,
+		lipgloss.NewStyle().Width(15).Foreground(colorWhite).Bold(true).Render("PROTOCOL"),
+		lipgloss.NewStyle().Foreground(colorWhite).Bold(true).Render("STATUS"),
 	)
 	if IsCI() {
 		header = fmt.Sprintf("%-15s %s", "PROTOCOL", "STATUS")
 	}
 
-	rows := []string{header, render(styleChain, strings.Repeat("═", 40))}
-	if IsCI() {
+	rows = []string{header}
+	if !IsCI() {
+		rows = []string{header, render(styleChain, strings.Repeat("═", 40))}
+	} else {
 		rows = []string{header, strings.Repeat("=", 40)}
 	}
+
+	// map to track unique vulnerabilities for the notes section
+	vulnMap := make(map[string]engine.Vulnerability)
 
 	for i, p := range res.Protocols {
 		// Add separator between protocols (but not before the first one)
@@ -267,6 +302,8 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 			statusText := "SECURE"
 			if !p.Supported {
 				statusText = "DISABLED"
+			} else if strings.Contains(p.Name, "SSL") || p.Name == "TLS 1.0" || p.Name == "TLS 1.1" {
+				statusText = "WEAK"
 			}
 			row = fmt.Sprintf("%-15s %s", p.Name, statusText)
 		}
@@ -286,63 +323,56 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 					}
 				}
 
-				cipherStyle := styleSubValue
-				statusIndicator := "✗"
-				severityLabel := ""
-
+				// Front indicator: enabled or not
+				frontInd := "✗"
 				if isEnabled {
-					statusIndicator = "✓"
-
-					// Categorize cipher security level
-					cipherLower := strings.ToLower(cipher)
-					if strings.Contains(cipherLower, "null") || strings.Contains(cipherLower, "md5") {
-						// Critically weak ciphers
-						cipherStyle = styleCrit
-						severityLabel = " [CRITICAL]"
-						statusIndicator = "✗"
-					} else if strings.Contains(cipherLower, "rc4") || strings.Contains(cipherLower, "des") {
-						// Weak ciphers
-						cipherStyle = styleWarn
-						severityLabel = " [WARNING]"
-						statusIndicator = "⚠"
-					} else {
-						// Secure ciphers
-						cipherStyle = styleSecure
-					}
+					frontInd = "✓"
 				}
 
-				cipherRow := fmt.Sprintf("  %s %s%s", statusIndicator, render(cipherStyle, cipher), severityLabel)
+				// Security status (after name)
+				secInd, cipherStyle := GetCipherDisplayStatus(cipher)
+				if !isEnabled {
+					cipherStyle = styleSubValue.Copy().Faint(true)
+				}
+
+				// Check for vulnerabilities
+				vulns := engine.GetCipherVulnerabilities(cipher)
+				vulnLabels := ""
+				for _, v := range vulns {
+					vulnLabels += fmt.Sprintf(" %s", render(styleVulnTag, v.Label))
+					vulnMap[v.ID] = v
+				}
+
+				if secInd != "" {
+					secInd = " " + secInd
+				}
+
+				cipherRow := fmt.Sprintf("  %s %s%s%s", frontInd, render(cipherStyle, cipher), secInd, vulnLabels)
 				rows = append(rows, cipherRow)
 			}
 		} else {
 			// Default mode: only show enabled ciphers
 			if p.Supported && len(p.Ciphers) > 0 {
 				for i, cipher := range p.Ciphers {
-					cipherStyle := styleSecure
-					severityLabel := ""
-					statusIndicator := "✓"
-
-					// Categorize cipher security level
-					cipherLower := strings.ToLower(cipher)
-					if strings.Contains(cipherLower, "null") || strings.Contains(cipherLower, "md5") {
-						// Critically weak ciphers
-						cipherStyle = styleCrit
-						severityLabel = " [CRITICAL]"
-						statusIndicator = "✗"
-					} else if strings.Contains(cipherLower, "rc4") || strings.Contains(cipherLower, "des") {
-						// Weak ciphers
-						cipherStyle = styleWarn
-						severityLabel = " [WARNING]"
-						statusIndicator = "⚠"
-					}
-
-					// Use └─ for last cipher, ├─ for others
-					prefix := "├─"
+					prefix := "    ├─"
 					if i == len(p.Ciphers)-1 {
-						prefix = "└─"
+						prefix = "    └─"
+					}
+					// Use shared logic for security status (after name)
+					secInd, cStyle := GetCipherDisplayStatus(cipher)
+
+					vulns := engine.GetCipherVulnerabilities(cipher)
+					vulnLabels := ""
+					for _, v := range vulns {
+						vulnLabels += fmt.Sprintf(" %s", render(styleVulnTag, v.Label))
+						vulnMap[v.ID] = v
 					}
 
-					cipherRow := fmt.Sprintf("  %s %s %s%s", render(styleChain, prefix), statusIndicator, render(cipherStyle, cipher), severityLabel)
+					if secInd != "" {
+						secInd = " " + secInd
+					}
+
+					cipherRow := fmt.Sprintf("%s %s%s%s", prefix, render(cStyle, cipher), secInd, vulnLabels)
 					rows = append(rows, cipherRow)
 				}
 			}
@@ -361,6 +391,55 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 	}
 
 	fmt.Println(output)
+
+	// Render Vulnerability Notes
+	if len(vulnMap) > 0 {
+		fmt.Println()
+		fmt.Println(render(styleTitle, "VULNERABILITY NOTES"))
+		fmt.Println(render(styleChain, strings.Repeat("─", 40)))
+		for _, v := range vulnMap {
+			severity := ""
+			if v.Severity != "" {
+				severity = fmt.Sprintf(" [%s]", strings.ToUpper(v.Severity))
+			}
+
+			note := fmt.Sprintf("%s %s%s\n%s %s\n%s %s\n%s %s\n%s %s\n%s %s\n%s %s\n%s %s (Verified: 2026-02-03)\n%s %s",
+				render(styleCrit, "●"),
+				render(styleLabel, v.Label),
+				render(styleCrit, severity),
+				render(styleSubValue, "  Quick Ref:"),
+				render(styleSubValue.Copy().Faint(false), v.Description),
+				render(styleSubValue, "  Risk Rating:"),
+				render(styleSubValue.Copy().Faint(false), v.RiskRating),
+				render(styleSubValue, "  Risk Detail:"),
+				render(styleSubValue.Copy().Faint(false), v.Risk),
+				render(styleSubValue, "  Impact Rating:"),
+				render(styleSubValue.Copy().Faint(false), v.ImpactRating),
+				render(styleSubValue, "  Impact Detail:"),
+				render(styleSubValue.Copy().Faint(false), v.Impact),
+				render(styleSubValue, "  Complexity:"),
+				render(styleSubValue.Copy().Faint(false), v.Complexity),
+				render(styleSubValue, "  Exploited in Wild:"),
+				render(styleSubValue.Copy().Faint(false), v.Exploited),
+				render(styleSubValue, "  CVE:"),
+				render(styleSubValue.Copy().Underline(true), v.URL))
+
+			if v.ExploitURL != "" {
+				note += fmt.Sprintf("\n%s %s",
+					render(styleSubValue, "  Exploit Ref:"),
+					render(styleSubValue.Copy().Underline(true), v.ExploitURL))
+			}
+
+			if v.SecondaryURL != "" && v.SecondaryURL != v.ExploitURL {
+				note += fmt.Sprintf("\n%s %s",
+					render(styleSubValue, "  Research Ref:"),
+					render(styleSubValue.Copy().Underline(true), v.SecondaryURL))
+			}
+
+			fmt.Println(note)
+			fmt.Println()
+		}
+	}
 }
 
 // getVersionForProtocol maps protocol names to tls.Version constants

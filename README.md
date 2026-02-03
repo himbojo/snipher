@@ -8,9 +8,14 @@
 - **🕵️ Legacy Detection:** Manual packet construction to detect SSLv2 and SSLv3, bypassing modern library restrictions.
 - **🔐 Cipher Suite Enumeration:**
   - **Strength-Based Sorting**: Ciphers displayed strongest-first (ECDHE+AES-256+GCM → RC4).
-  - **Verbose Mode** (`--verbose`): Shows ALL possible ciphers with ✓/✗ status indicators.
-  - **Weak Cipher Highlighting**: Automatically flags RC4, DES, 3DES, MD5, NULL ciphers.
-  - **Comprehensive Coverage**: TLS 1.0-1.3 cipher discovery.
+  - **Verbose Mode** (`--verbose`): Shows ALL possible ciphers with status indicators (`✓` enabled, `✗` disabled).
+  - **Reference Mode** (`--cipher-list`): View a standardized list of all supported ciphers by protocol.
+  - **Security Icons**: Clear visual indicators for weak (`⚠`) and critically insecure (`⊘`) ciphers.
+- **🔬 Deep Intel Vulnerability Reporting:**
+  - **Standardized Ratings**: All vulnerabilities ranked on a `Low/Medium/High/Critical` scale.
+  - **Risk & Impact Details**: Explicit "Risk Detail" and "Impact Detail" fields for every report.
+  - **Exploit Tracking**: Specific "Exploit Ref" links for vulnerabilities currently exploited in the wild.
+  - **Recency Verification**: All vulnerability profiles include a "Verified" date for data recency.
 - **📜 Advanced Certificate Audit:**
   - Full **Chain of Trust** visualization.
   - **Trust Anchor** (Root CA) identification and highlighting.
