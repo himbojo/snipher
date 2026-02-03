@@ -14,8 +14,9 @@ import (
 
 // ScannerConfig holds configuration for the scanner
 type ScannerConfig struct {
-	MinTimeout time.Duration
-	MaxTimeout time.Duration
+	MinTimeout      time.Duration
+	MaxTimeout      time.Duration
+	ProgressChannel chan string
 }
 
 // StdScanner implements the Scanner interface using standard Go crypto/tls and net packages
@@ -36,8 +37,16 @@ func NewStdScanner(config ScannerConfig) *StdScanner {
 	}
 }
 
+func (s *StdScanner) reportProgress(msg string) {
+	if s.config.ProgressChannel != nil {
+		s.config.ProgressChannel <- msg
+	}
+}
+
 // Scan performs a basic TCP connectivity check and TLS certificate extraction
 func (s *StdScanner) Scan(ctx context.Context, target string, port int, caBundlePath string) (models.ScanResult, error) {
+	s.reportProgress(fmt.Sprintf("Connecting to %s:%d...", target, port))
+
 	result := models.ScanResult{
 		Target:    target,
 		Port:      port,
@@ -75,6 +84,8 @@ func (s *StdScanner) Scan(ctx context.Context, target string, port int, caBundle
 	} else {
 		defer conn.Close()
 		result.Latency = time.Since(start)
+
+		s.reportProgress("Retrieving certificate chain...")
 
 		// 3. Extract & Validate Certificate Info
 		state := conn.ConnectionState()
@@ -177,6 +188,7 @@ func (s *StdScanner) Scan(ctx context.Context, target string, port int, caBundle
 	}
 
 	// 4. Protocol Enumeration (Parallel)
+	s.reportProgress("Enumerating supported protocols...")
 	legacy := s.checkLegacyProtocols(ctx, target, port)
 	modern := s.checkProtocols(ctx, target, port)
 
@@ -204,6 +216,8 @@ func (s *StdScanner) checkProtocols(ctx context.Context, target string, port int
 		wg.Add(1)
 		go func(idx int, version uint16, name string) {
 			defer wg.Done()
+
+			s.reportProgress(fmt.Sprintf("Checking %s...", name))
 
 			dialer := &net.Dialer{Timeout: 2 * time.Second}
 			conf := &tls.Config{
@@ -244,8 +258,23 @@ func (s *StdScanner) enumerateCiphers(target string, port int, version uint16) [
 
 	// Brute-force: Try every known cipher individually
 	allCiphers := AllModernCiphers()
+	total := len(allCiphers)
 
-	for _, cipherID := range allCiphers {
+	for i, cipherID := range allCiphers {
+		if i%5 == 0 { // Don't spam the channel, update every 5 ciphers
+			verStr := "Unknown"
+			switch version {
+			case tls.VersionTLS10:
+				verStr = "TLS 1.0"
+			case tls.VersionTLS11:
+				verStr = "TLS 1.1"
+			case tls.VersionTLS12:
+				verStr = "TLS 1.2"
+			case tls.VersionTLS13:
+				verStr = "TLS 1.3"
+			}
+			s.reportProgress(fmt.Sprintf("Scanning %s ciphers (%d/%d)...", verStr, i, total))
+		}
 		timeout := s.config.MinTimeout
 
 		// Adaptive retry loop
