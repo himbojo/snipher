@@ -59,6 +59,8 @@ go build -o snipher.exe ./cmd/snipher
 - `--json`: Output strict JSON schema for automation.
 - `--ca-bundle, --ca`: Path to custom CA PEM file for internal PKI validation.
 - `--sans`: Show Subject Alternative Names in certificate details.
+- `--min-timeout`: Initial timeout per cipher check (default: `2s`).
+- `--max-timeout`: Maximum timeout for cipher check retries (default: `10s`).
 
 ## CI/CD Integration
 

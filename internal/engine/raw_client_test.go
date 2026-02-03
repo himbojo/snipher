@@ -46,7 +46,7 @@ func TestCheckLegacyProtocols(t *testing.T) {
 	var port int
 	fmt.Sscanf(portStr, "%d", &port)
 
-	scanner := NewStdScanner()
+	scanner := NewStdScanner(ScannerConfig{})
 	results := scanner.checkLegacyProtocols(context.Background(), host, port)
 
 	sslv2Found := false
@@ -91,7 +91,7 @@ func TestCheckLegacyProtocols_Disabled(t *testing.T) {
 	var port int
 	fmt.Sscanf(portStr, "%d", &port)
 
-	scanner := NewStdScanner()
+	scanner := NewStdScanner(ScannerConfig{})
 	results := scanner.checkLegacyProtocols(context.Background(), host, port)
 
 	for _, p := range results {

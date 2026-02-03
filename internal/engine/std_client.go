@@ -12,12 +12,28 @@ import (
 	"time"
 )
 
+// ScannerConfig holds configuration for the scanner
+type ScannerConfig struct {
+	MinTimeout time.Duration
+	MaxTimeout time.Duration
+}
+
 // StdScanner implements the Scanner interface using standard Go crypto/tls and net packages
-type StdScanner struct{}
+type StdScanner struct {
+	config ScannerConfig
+}
 
 // NewStdScanner creates a new instance of StdScanner
-func NewStdScanner() *StdScanner {
-	return &StdScanner{}
+func NewStdScanner(config ScannerConfig) *StdScanner {
+	if config.MinTimeout == 0 {
+		config.MinTimeout = 2 * time.Second
+	}
+	if config.MaxTimeout == 0 {
+		config.MaxTimeout = 10 * time.Second
+	}
+	return &StdScanner{
+		config: config,
+	}
 }
 
 // Scan performs a basic TCP connectivity check and TLS certificate extraction
@@ -230,26 +246,41 @@ func (s *StdScanner) enumerateCiphers(target string, port int, version uint16) [
 	allCiphers := AllModernCiphers()
 
 	for _, cipherID := range allCiphers {
-		dialer := &net.Dialer{Timeout: 2 * time.Second} // Reliable timeout for individual checks
-		conf := &tls.Config{
-			ServerName:         target,
-			InsecureSkipVerify: true,
-			MinVersion:         version,
-			MaxVersion:         version,
-			CipherSuites:       []uint16{cipherID}, // Check ONLY this cipher
-		}
+		timeout := s.config.MinTimeout
 
-		conn, err := tls.DialWithDialer(dialer, "tcp", address, conf)
-		if err == nil {
-			// Handshake succeeded!
-			state := conn.ConnectionState()
-			suiteName := GetCipherSuiteName(state.CipherSuite)
-
-			// Double check it matches what we asked for (sanity check)
-			if state.CipherSuite == cipherID {
-				supported = append(supported, suiteName)
+		// Adaptive retry loop
+		for timeout <= s.config.MaxTimeout {
+			dialer := &net.Dialer{Timeout: timeout}
+			conf := &tls.Config{
+				ServerName:         target,
+				InsecureSkipVerify: true,
+				MinVersion:         version,
+				MaxVersion:         version,
+				CipherSuites:       []uint16{cipherID}, // Check ONLY this cipher
 			}
-			conn.Close()
+
+			conn, err := tls.DialWithDialer(dialer, "tcp", address, conf)
+			if err == nil {
+				// Handshake succeeded!
+				state := conn.ConnectionState()
+				suiteName := GetCipherSuiteName(state.CipherSuite)
+
+				// Double check it matches what we asked for (sanity check)
+				if state.CipherSuite == cipherID {
+					supported = append(supported, suiteName)
+				}
+				conn.Close()
+				break // Move to next cipher
+			} else {
+				// Check for timeout error
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					// Exponential backoff
+					timeout *= 2
+					continue // Retry with longer timeout
+				}
+				// Other error (connection refused, etc.) - proceed to next cipher
+				break
+			}
 		}
 	}
 

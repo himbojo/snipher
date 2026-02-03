@@ -75,7 +75,7 @@ func TestCheckProtocols(t *testing.T) {
 	var port int
 	fmt.Sscanf(portStr, "%d", &port)
 
-	scanner := NewStdScanner()
+	scanner := NewStdScanner(ScannerConfig{})
 	results := scanner.checkProtocols(context.Background(), host, port)
 
 	foundTLS12 := false

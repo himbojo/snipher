@@ -21,9 +21,14 @@ func DefaultAction(c *cli.Context) error {
 	target := c.Args().First()
 	port := c.Int("port")
 	isJSON := c.Bool("json")
+	minTimeout := c.Duration("min-timeout")
+	maxTimeout := c.Duration("max-timeout")
 
 	// 3. Execute Scan
-	scanner := engine.NewStdScanner()
+	scanner := engine.NewStdScanner(engine.ScannerConfig{
+		MinTimeout: minTimeout,
+		MaxTimeout: maxTimeout,
+	})
 	res, err := scanner.Scan(context.Background(), target, port, c.String("ca-bundle"))
 
 	if err != nil {

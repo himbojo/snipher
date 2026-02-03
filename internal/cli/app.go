@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"time"
+
 	"github.com/urfave/cli/v2"
 )
 
@@ -33,6 +35,16 @@ func NewApp() *cli.App {
 				Name:    "ca-bundle",
 				Usage:   "Path to a custom CA bundle (PEM format)",
 				Aliases: []string{"ca"},
+			},
+			&cli.DurationFlag{
+				Name:  "min-timeout",
+				Value: 2 * time.Second,
+				Usage: "Initial timeout per cipher check",
+			},
+			&cli.DurationFlag{
+				Name:  "max-timeout",
+				Value: 10 * time.Second,
+				Usage: "Maximum timeout for cipher check retries",
 			},
 		},
 		UseShortOptionHandling: true,
