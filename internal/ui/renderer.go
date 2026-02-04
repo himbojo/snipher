@@ -22,6 +22,13 @@ var (
 	colorWhite   = lipgloss.Color("#FFFFFF")
 	colorDim     = lipgloss.Color("#444444")
 
+	// Background Colors for Tags
+	colorBgRed     = lipgloss.Color("#880000") // Critical
+	colorBgOrange  = lipgloss.Color("#AA5500") // High
+	colorBgMagenta = lipgloss.Color("#990099") // Medium
+	colorBgBlue    = lipgloss.Color("#000088") // Low
+	colorBgCyan    = lipgloss.Color("#006666") // Policy
+
 	styleTitle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(colorCyan).
@@ -50,8 +57,7 @@ var (
 			Bold(true).
 			Foreground(colorRed)
 
-	styleVulnTag = lipgloss.NewStyle().
-			Background(colorRed).
+	styleTagBase = lipgloss.NewStyle().
 			Foreground(colorWhite).
 			Bold(true).
 			Padding(0, 1)
@@ -76,6 +82,28 @@ func render(style lipgloss.Style, text string) string {
 		return text
 	}
 	return style.Render(text)
+}
+
+// getTagStyle returns a lipgloss Style with a background color based on severity or type
+func getTagStyle(tagType string, severity string) lipgloss.Style {
+	style := styleTagBase.Copy()
+
+	if tagType == "POLICY" {
+		return style.Background(colorBgCyan)
+	}
+
+	switch strings.ToLower(severity) {
+	case "critical":
+		return style.Background(colorBgRed)
+	case "high":
+		return style.Background(colorBgOrange)
+	case "medium":
+		return style.Background(colorBgMagenta)
+	case "low":
+		return style.Background(colorBgBlue)
+	default:
+		return style.Background(colorDim)
+	}
 }
 
 // RenderTargetIntelligence displays a summary of the connection and target status
@@ -250,7 +278,7 @@ func GetCipherDisplayStatus(cipher string) (string, lipgloss.Style) {
 }
 
 // RenderProtocolMatrix displays the supported protocols in a table-like format
-func RenderProtocolMatrix(res models.ScanResult, verbose bool, mode string) {
+func RenderProtocolMatrix(res models.ScanResult, verbose bool, mode string, report *models.ComplianceResult) {
 	title := render(styleTitle, "PROTOCOL MATRIX")
 	if IsCI() {
 		fmt.Println("PROTOCOL MATRIX")
@@ -293,6 +321,13 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool, mode string) {
 		} else if p.Name == "TLS 1.0" || p.Name == "TLS 1.1" {
 			// Mark old protocols as WARNING even if enabled (technically they are insecure)
 			status = render(styleWarn, "🔓 WEAK")
+		}
+
+		// Check policy for protocol
+		if report != nil && p.Supported {
+			if stat, ok := report.ProtocolStats[p.Name]; ok && stat == models.ComplianceViolation {
+				status += " " + render(getTagStyle("POLICY", ""), "POLICY VIOLATION")
+			}
 		}
 
 		row := lipgloss.JoinHorizontal(lipgloss.Left,
@@ -342,8 +377,15 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool, mode string) {
 				vulns := engine.GetCipherVulnerabilities(cipher)
 				vulnLabels := ""
 				for _, v := range vulns {
-					vulnLabels += fmt.Sprintf(" %s", render(styleVulnTag, v.Label))
+					vulnLabels += fmt.Sprintf(" %s", render(getTagStyle("VULN", v.Severity), v.Label))
 					vulnMap[v.ID] = v
+				}
+
+				// Check policy for cipher
+				if report != nil && isEnabled {
+					if stat, ok := report.CipherStats[cipher]; ok && stat == models.ComplianceViolation {
+						vulnLabels += " " + render(getTagStyle("POLICY", ""), "POLICY VIOLATION")
+					}
 				}
 
 				if secInd != "" {
@@ -370,8 +412,15 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool, mode string) {
 					vulns := engine.GetCipherVulnerabilities(cipher)
 					vulnLabels := ""
 					for _, v := range vulns {
-						vulnLabels += fmt.Sprintf(" %s", render(styleVulnTag, v.Label))
+						vulnLabels += fmt.Sprintf(" %s", render(getTagStyle("VULN", v.Severity), v.Label))
 						vulnMap[v.ID] = v
+					}
+
+					// Check policy for cipher
+					if report != nil {
+						if stat, ok := report.CipherStats[cipher]; ok && stat == models.ComplianceViolation {
+							vulnLabels += " " + render(getTagStyle("POLICY", ""), "POLICY VIOLATION")
+						}
 					}
 
 					if secInd != "" {

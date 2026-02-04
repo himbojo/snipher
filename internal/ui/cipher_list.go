@@ -49,7 +49,7 @@ func RenderCipherList(mode string) {
 			vulns := engine.GetCipherVulnerabilities(cipher)
 			vulnLabels := ""
 			for _, v := range vulns {
-				vulnLabels += fmt.Sprintf(" %s", render(styleVulnTag, v.Label))
+				vulnLabels += fmt.Sprintf(" %s", render(getTagStyle("VULN", v.Severity), v.Label))
 				vulnMap[v.ID] = v
 			}
 

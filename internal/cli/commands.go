@@ -147,6 +147,18 @@ func DefaultAction(c *cli.Context) error {
 		os.Exit(models.ExitOperational)
 	}
 
+	// 5. Evaluate Policy Compliance
+	var complianceReport *models.ComplianceResult
+	if c.String("policy") != "" {
+		policy, err := engine.LoadPolicy(c.String("policy"))
+		if err != nil {
+			fmt.Printf("Policy Error: %v\n", err)
+			os.Exit(models.ExitOperational)
+		}
+		report := engine.CheckCompliance(res, *policy)
+		complianceReport = &report
+	}
+
 	if isJSON {
 		b, _ := json.MarshalIndent(res, "", "  ")
 		fmt.Println(string(b))
@@ -154,13 +166,18 @@ func DefaultAction(c *cli.Context) error {
 		// Render final output
 		ui.RenderTargetIntelligence(res, c.Bool("sans"))
 		ui.RenderCertificateIdentity(res, c.Bool("sans"))
-		ui.RenderProtocolMatrix(res, c.Bool("verbose"), mode)
+		ui.RenderProtocolMatrix(res, c.Bool("verbose"), mode, complianceReport)
 	}
 
 	// Check for critical issues using centralized logic
 	if res.HasCriticalIssues() {
 		msg := res.GetCriticalIssueMessage()
 		return &models.CriticalError{Msg: msg}
+	}
+
+	// Fail if policy violation exists
+	if complianceReport != nil && !complianceReport.IsCompliant {
+		return &models.CriticalError{Msg: "Policy compliance failed. See violations above."}
 	}
 
 	return nil

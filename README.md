@@ -18,9 +18,15 @@
   - **Security Icons**: Clear visual indicators for weak (`⚠`) and critically insecure (`⊘`) ciphers.
 - **🔬 Deep Intel Vulnerability Reporting:**
   - **Standardized Ratings**: All vulnerabilities ranked on a `Low/Medium/High/Critical` scale.
+  - **Colorful Visual Tags**: Instant visual recognition via severity-based background colors (Red = Critical, Orange = High, Magenta = Medium).
   - **Risk & Impact Details**: Explicit "Risk Detail" and "Impact Detail" fields for every report.
   - **Exploit Tracking**: Specific "Exploit Ref" links for vulnerabilities currently exploited in the wild.
   - **Recency Verification**: All vulnerability profiles include a "Verified" date for data recency.
+- **⚖️ Policy-Based Auditing:**
+  - **Compliance-as-Code**: Define corporate TLS standards in a YAML policy file.
+  - **Automatic Enforcement**: Use `--policy path.yaml` to verify targets against allowed protocols and ciphers.
+  - **Dual Naming Support**: Use either IANA or OpenSSL names in your policy files.
+  - **Visual Violation Tracking**: Non-compliant configurations are explicitly tagged with `POLICY VIOLATION` (Cyan).
 - **📜 Advanced Certificate Audit:**
   - Full **Chain of Trust** visualization.
   - **Trust Anchor** (Root CA) identification and highlighting.
@@ -30,8 +36,8 @@
 - **📦 Private PKI Support:** Use the `--ca-bundle` flag to validate against custom root certificates.
 - **🤖 Automation Ready:** Stable `--json` output for CI/CD pipelines.
 - **🚦 Strict Exit Codes for CI/CD:** 
-  - **Exit Code 0**: Scan completed successfully, no critical issues found.
-  - **Exit Code 1**: Critical security issue detected (expired/untrusted certificates).
+  - **Exit Code 0**: Scan completed successfully, no issues/violations found.
+  - **Exit Code 1**: Critical security issue or Policy Violation detected.
   - **Exit Code 2**: Operational error (DNS failure, connection timeout, invalid input).
 
 ## Installation & Building
@@ -48,41 +54,68 @@ go build -o snipher.exe ./cmd/snipher
 ```
 
 ## Usage
-+
-+```bash
-+# Standard scan (shows enabled ciphers sorted by strength)
-+./snipher google.com
-+
-+# Combined naming format (IANA / OpenSSL)
-+./snipher google.com --both
-+
-+# Verbose mode with OpenSSL naming convention
-+./snipher google.com --verbose --openssl
-+
-+# Scan with custom CA bundle and SANs visible
-+./snipher internal.local --ca-bundle ./root.pem --sans
-+
-+# JSON output for pipelines
-+./snipher google.com --json
-+
-+# Scan slow servers with adaptive timeouts
-+./snipher 3des.badssl.com --min-timeout 500ms --max-timeout 5s
-+
-+# Display reference list of allSupported ciphers
-+./snipher --cipher-list --both
-+```
-+
-+### Flags
-+- `--port, -p`: Select target port (default: 443).
-+- `--verbose, -v`: Show all possible cipher suites for each enabled protocol with status indicators (✓ enabled, ✗ disabled).
-+- `--both`: Show combined cipher names in `IANA / OpenSSL` format.
-+- `--openssl`: Show cipher names in legacy OpenSSL format.
-+- `--cipher-list`: Display a reference list of all supported ciphers and exit.
-+- `--json`: Output strict JSON schema for automation.
-+- `--ca-bundle, --ca`: Path to custom CA PEM file for internal PKI validation.
-+- `--sans`: Show Subject Alternative Names in certificate details.
-+- `--min-timeout`: Initial timeout per cipher check (default: `2s`).
-+- `--max-timeout`: Maximum timeout for cipher check retries (default: `10s`).
+
+```bash
+# Standard scan (shows enabled ciphers sorted by strength)
+./snipher google.com
+
+# Verify against a corporate policy
+./snipher production.internal --policy my-standard.yaml
+
+# Combined naming format (IANA / OpenSSL)
+./snipher google.com --both
+
+# Verbose mode with OpenSSL naming convention
+./snipher google.com --verbose --openssl
+
+# Scan with custom CA bundle and SANs visible
+./snipher internal.local --ca-bundle ./root.pem --sans
+
+# JSON output for pipelines
+./snipher google.com --json
+
+# Scan slow servers with adaptive timeouts
+./snipher 3des.badssl.com --min-timeout 500ms --max-timeout 5s
+
+# Display reference list of all supported ciphers
+./snipher --cipher-list --both
+```
+
+### Flags
+- `--port, -p`: Select target port (default: 443).
+- `--verbose, -v`: Show all possible cipher suites for each enabled protocol with status indicators (✓ enabled, ✗ disabled).
+- `--policy`: Path to a YAML policy file to verify against.
+- `--both`: Show combined cipher names in `IANA / OpenSSL` format.
+- `--openssl`: Show cipher names in legacy OpenSSL format.
+- `--cipher-list`: Display a reference list of all supported ciphers and exit.
+- `--json`: Output strict JSON schema for automation.
+- `--ca-bundle, --ca`: Path to custom CA PEM file for internal PKI validation.
+- `--sans`: Show Subject Alternative Names in certificate details.
+- `--min-timeout`: Initial timeout per cipher check (default: `2s`).
+- `--max-timeout`: Maximum timeout for cipher check retries (default: `10s`).
+
+## Policy-Based Auditing
+
+Define a "Golden Standard" in YAML to automate security compliance.
+
+### Example Policy (`standard.yaml`)
+```yaml
+name: "Corporate Standard v1.2"
+protocols:
+  - "TLS 1.2"
+  - "TLS 1.3"
+ciphers:
+  - "TLS_AES_256_GCM_SHA384"
+  - "ECDHE-RSA-AES256-GCM-SHA384" # OpenSSL names supported!
+```
+
+### Color Legend 🎨
+When running in interactive mode (non-CI), Snipher uses background colors to help you prioritize:
+- 🔴 **Red**: `Critical` Security Vulnerability
+- 🟠 **Orange**: `High` Security Risk
+- 🟣 **Magenta**: `Medium` Security Risk
+- 🔵 **Blue**: `Low` Security Risk
+- 🟢 **Cyan**: `Policy Violation` (Compliance failure)
 
 ## CI/CD Integration
 

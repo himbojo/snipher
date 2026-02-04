@@ -76,6 +76,11 @@ func NewApp() *cli.App {
 				Name:  "both",
 				Usage: "Show both IANA and OpenSSL cipher names",
 			},
+			&cli.StringFlag{
+				Name:    "policy",
+				Usage:   "Path to a YAML policy file to verify against",
+				Aliases: []string{"poll"},
+			},
 		},
 		UseShortOptionHandling: true,
 		Action:                 DefaultAction,
