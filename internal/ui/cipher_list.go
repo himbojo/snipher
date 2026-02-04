@@ -10,6 +10,11 @@ import (
 func RenderCipherList() {
 	render(styleTitle, "SUPPORTED CIPHER SUITES")
 
+	if !IsCI() {
+		fmt.Println(styleCard.Render(GetLegend()))
+		fmt.Println()
+	}
+
 	versions := []struct {
 		ver  uint16
 		name string

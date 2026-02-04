@@ -289,7 +289,7 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 		status := render(styleSecure, "🔒 SECURE")
 		if !p.Supported {
 			status = render(styleSubValue.Copy().Faint(true), "─ DISABLED")
-		} else if strings.Contains(p.Name, "SSL") || p.Name == "TLS 1.0" || p.Name == "TLS 1.1" {
+		} else if p.Name == "TLS 1.0" || p.Name == "TLS 1.1" {
 			// Mark old protocols as WARNING even if enabled (technically they are insecure)
 			status = render(styleWarn, "🔓 WEAK")
 		}
@@ -302,7 +302,7 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 			statusText := "SECURE"
 			if !p.Supported {
 				statusText = "DISABLED"
-			} else if strings.Contains(p.Name, "SSL") || p.Name == "TLS 1.0" || p.Name == "TLS 1.1" {
+			} else if p.Name == "TLS 1.0" || p.Name == "TLS 1.1" {
 				statusText = "WEAK"
 			}
 			row = fmt.Sprintf("%-15s %s", p.Name, statusText)
@@ -379,6 +379,13 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 		}
 	}
 
+	// Inject Legend at the top if not CI
+	if !IsCI() {
+		legend := GetLegend()
+		// Add legend and a separator/spacer
+		rows = append([]string{legend, strings.Repeat(" ", 40)}, rows...)
+	}
+
 	content := lipgloss.JoinVertical(lipgloss.Left, rows...)
 
 	// Apply card styling only if not in CI mode
@@ -440,6 +447,7 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 			fmt.Println()
 		}
 	}
+
 }
 
 // getVersionForProtocol maps protocol names to tls.Version constants
@@ -456,4 +464,33 @@ func getVersionForProtocol(name string) uint16 {
 	default:
 		return 0
 	}
+}
+
+// GetLegend returns the formatted legend string
+func GetLegend() string {
+	if IsCI() {
+		return ""
+	}
+
+	// Define legend items
+	items := []struct {
+		symbol string
+		desc   string
+		style  lipgloss.Style
+	}{
+		{"🔒", "Secure", styleSecure},
+		{"🔓", "Weak", styleWarn},
+		{"⚠", "Warning", styleWarn},
+		{"⊘", "Critical", styleCrit},
+		{"✓", "Enabled", styleSecure},
+		{"✗", "Disabled", styleSubValue.Copy().Faint(true)},
+	}
+
+	var nodes []string
+	for _, item := range items {
+		nodes = append(nodes, fmt.Sprintf("%s %s", render(item.style, item.symbol), render(styleSubValue, item.desc)))
+	}
+
+	// Join horizontally with spacing
+	return lipgloss.JoinHorizontal(lipgloss.Top, strings.Join(nodes, "   "))
 }

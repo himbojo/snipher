@@ -27,33 +27,7 @@ func TestHasCriticalIssues_UntrustedCert(t *testing.T) {
 	}
 }
 
-func TestHasCriticalIssues_SSLv2(t *testing.T) {
-	result := ScanResult{
-		NotAfter:  time.Now().Add(365 * 24 * time.Hour),
-		IsTrusted: true,
-		Protocols: []ProtocolDetails{
-			{Name: "SSLv2", Supported: true},
-		},
-	}
-
-	if !result.HasCriticalIssues() {
-		t.Error("Expected HasCriticalIssues to return true for SSLv2 support")
-	}
-}
-
-func TestHasCriticalIssues_SSLv3(t *testing.T) {
-	result := ScanResult{
-		NotAfter:  time.Now().Add(365 * 24 * time.Hour),
-		IsTrusted: true,
-		Protocols: []ProtocolDetails{
-			{Name: "SSLv3", Supported: true},
-		},
-	}
-
-	if !result.HasCriticalIssues() {
-		t.Error("Expected HasCriticalIssues to return true for SSLv3 support")
-	}
-}
+// Tests regarding SSLv2/SSLv3 removal - deleted
 
 func TestHasCriticalIssues_NoCriticalIssues(t *testing.T) {
 	result := ScanResult{
@@ -133,21 +107,7 @@ func TestGetCriticalIssueMessage_UntrustedCert(t *testing.T) {
 	}
 }
 
-func TestGetCriticalIssueMessage_LegacyProtocol(t *testing.T) {
-	result := ScanResult{
-		NotAfter:  time.Now().Add(365 * 24 * time.Hour),
-		IsTrusted: true,
-		Protocols: []ProtocolDetails{
-			{Name: "SSLv2", Supported: true},
-		},
-	}
-
-	msg := result.GetCriticalIssueMessage()
-	expected := "CRITICAL: Legacy protocol SSLv2 detected"
-	if msg != expected {
-		t.Errorf("Expected message %q, got %q", expected, msg)
-	}
-}
+// TestGetCriticalIssueMessage_LegacyProtocol removed
 
 func TestGetCriticalIssueMessage_NoIssues(t *testing.T) {
 	result := ScanResult{

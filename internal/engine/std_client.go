@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"net"
 	"os"
@@ -107,20 +108,51 @@ func (s *StdScanner) Scan(ctx context.Context, target string, port int, caBundle
 			}
 
 			// Handle Custom CA Bundle
+			var bundleCerts []*x509.Certificate
 			if caBundlePath != "" {
 				caData, err := os.ReadFile(caBundlePath)
 				if err != nil {
 					return result, fmt.Errorf("failed to read CA bundle at %s: %w", caBundlePath, err)
 				}
+
+				// Populate Roots
 				roots := x509.NewCertPool()
 				if ok := roots.AppendCertsFromPEM(caData); !ok {
 					return result, fmt.Errorf("failed to parse CA bundle at %s: invalid PEM", caBundlePath)
 				}
 				opts.Roots = roots
+
+				// Also populate opts.Intermediates with bundle certs to allow bridging gaps
+				// And verify explicit trust
+				block, rest := pem.Decode(caData)
+				for block != nil {
+					if block.Type == "CERTIFICATE" {
+						c, err := x509.ParseCertificate(block.Bytes)
+						if err == nil {
+							bundleCerts = append(bundleCerts, c)
+							opts.Intermediates.AddCert(c)
+						}
+					}
+					block, rest = pem.Decode(rest)
+				}
 			}
 
 			verifiedChains, verifyErr := leaf.Verify(opts)
 			result.IsTrusted = (verifyErr == nil)
+
+			// Explicit Leaf Trust Check
+			// If validation failed, but the leaf itself is present in the provided bundle, trust it.
+			if !result.IsTrusted && len(bundleCerts) > 0 {
+				for _, bc := range bundleCerts {
+					if bc.Equal(leaf) {
+						result.IsTrusted = true
+						verifyErr = nil // Clear error
+						// Manufacture a verified chain of just the leaf for reporting
+						verifiedChains = [][]*x509.Certificate{{leaf}}
+						break
+					}
+				}
+			}
 
 			// If verification failed due to time (expiry), try a "time-agnostic" check
 			// by using the certificate's own validity period to see if the CHAIN is trusted.
@@ -132,6 +164,9 @@ func (s *StdScanner) Scan(ctx context.Context, target string, port int, caBundle
 				} else if time.Now().Before(leaf.NotBefore) {
 					agnosticOpts.CurrentTime = leaf.NotBefore.Add(1 * time.Second)
 				}
+
+				// Re-copy intermediates/roots as they are pointers/structs?
+				// verifyOpts contains pointers to CertPools. Should be safe to reuse.
 
 				agnosticChains, agnosticErr := leaf.Verify(agnosticOpts)
 				if agnosticErr == nil {
@@ -189,10 +224,10 @@ func (s *StdScanner) Scan(ctx context.Context, target string, port int, caBundle
 
 	// 4. Protocol Enumeration (Parallel)
 	s.reportProgress("Enumerating supported protocols...")
-	legacy := s.checkLegacyProtocols(ctx, target, port)
+	// Legacy protocols (SSLv2/v3) removed as per requirement
 	modern := s.checkProtocols(ctx, target, port)
 
-	result.Protocols = append(legacy, modern...)
+	result.Protocols = append([]models.ProtocolDetails{}, modern...)
 
 	return result, nil
 }

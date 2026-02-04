@@ -141,21 +141,6 @@ var (
 		URL:          "https://nvd.nist.gov/vuln/detail/CVE-2015-0204",
 		SecondaryURL: "https://mitls.org/pages/attacks/FREAK",
 	}
-	VulnPoodle = Vulnerability{
-		ID:           "POODLE",
-		Label:        "POODLE",
-		Severity:     "Medium",
-		Description:  "Padding oracle attack in SSL 3.0 allowing theft of secure session cookies.",
-		RiskRating:   "Medium",
-		ImpactRating: "Medium",
-		Complexity:   "Medium",
-		Exploited:    "Yes",
-		ExploitURL:   "https://www.openssl.org/~bodo/ssl-poodle.pdf",
-		Risk:         "Padding oracle vulnerability in SSL 3.0",
-		Impact:       "Extraction of secure cookies and credentials (Information Disclosure)",
-		URL:          "https://nvd.nist.gov/vuln/detail/CVE-2014-3566",
-		SecondaryURL: "https://www.openssl.org/~bodo/ssl-poodle.pdf",
-	}
 )
 
 // GetCipherVulnerabilities returns a list of vulnerabilities associated with a cipher suite name

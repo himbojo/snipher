@@ -1,7 +1,6 @@
 package models
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -47,12 +46,9 @@ func (r *ScanResult) HasCriticalIssues() bool {
 		return true
 	}
 
-	// Check for legacy protocols (SSLv2, SSLv3)
-	for _, p := range r.Protocols {
-		if (p.Name == "SSLv2" || p.Name == "SSLv3") && p.Supported {
-			return true
-		}
-	}
+	// Check for legacy protocols (SSLv2, SSLv3) - Removed
+	// We no longer scan for these, but if they were somehow present, they would be critical.
+	// Since detection logic is gone, this check is redundant.
 
 	return false
 }
@@ -83,13 +79,6 @@ func (r *ScanResult) GetCriticalIssueMessage() string {
 	// Check for untrusted certificate
 	if !r.NotAfter.IsZero() && !r.IsTrusted {
 		return "Certificate is UNTRUSTED"
-	}
-
-	// Check for legacy protocols
-	for _, p := range r.Protocols {
-		if (p.Name == "SSLv2" || p.Name == "SSLv3") && p.Supported {
-			return fmt.Sprintf("CRITICAL: Legacy protocol %s detected", p.Name)
-		}
 	}
 
 	return ""

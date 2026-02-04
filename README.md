@@ -1,6 +1,6 @@
 # Snipher 🕵️‍♂️
 
-**Snipher** is a high-performance Go-based security auditing tool designed to inspect, validate, and audit TLS configurations. It provides deep visibility into certificate trust chains, protocol support (from legacy SSLv2 to modern TLS 1.3), and security posture.
+**Snipher** is a high-performance Go-based security auditing tool designed to inspect, validate, and audit TLS configurations. It provides deep visibility into certificate trust chains, protocol support (TLS 1.0 to TLS 1.3), and security posture.
 
 > [!NOTE]
 > **How do you say it?** 🗣️
@@ -10,7 +10,7 @@
 ## Features
 
 - **🛡️ Protocol Enumeration:** Parallel detection of TLS 1.0, 1.1, 1.2, and 1.3.
-- **🕵️ Legacy Detection:** Manual packet construction to detect SSLv2 and SSLv3, bypassing modern library restrictions.
+- **� Modern Focus:** Explicitly drops support for SSLv2/v3 to encourage modern security standards and tool safety.
 - **🔐 Cipher Suite Enumeration:**
   - **Strength-Based Sorting**: Ciphers displayed strongest-first (ECDHE+AES-256+GCM → RC4).
   - **Verbose Mode** (`--verbose`): Shows ALL possible ciphers with status indicators (`✓` enabled, `✗` disabled).
@@ -31,7 +31,7 @@
 - **🤖 Automation Ready:** Stable `--json` output for CI/CD pipelines.
 - **🚦 Strict Exit Codes for CI/CD:** 
   - **Exit Code 0**: Scan completed successfully, no critical issues found.
-  - **Exit Code 1**: Critical security issue detected (expired/untrusted certificates, SSLv2/SSLv3 enabled).
+  - **Exit Code 1**: Critical security issue detected (expired/untrusted certificates).
   - **Exit Code 2**: Operational error (DNS failure, connection timeout, invalid input).
 
 ## Installation & Building
@@ -140,7 +140,7 @@ Test detection logic locally without external dependencies using our mock TLS se
 
 ## 🚀 Future Improvements
 
-- **Icon Legend**: Add a clear reference guide for all security and status icons (`✓`, `⊘`, `⚠`, `✗`).
+
 - **Enhanced Dossier Cards**: Improve the TUI formatting for vulnerability data by wrapping intel in stylized cards with boxed attributes for better scannability.
 - **Automated Remediation Advice**: Contextual tips based on detected flaws.
 
