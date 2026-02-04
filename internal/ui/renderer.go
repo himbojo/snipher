@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"snipher/internal/engine"
 	"snipher/internal/models"
+	"sort"
 	"strings"
 	"time"
 
@@ -379,6 +380,11 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 		}
 	}
 
+	// Render Vulnerability Notes
+	if len(vulnMap) > 0 {
+		rows = append(rows, RenderVulnerabilitySection(vulnMap)...)
+	}
+
 	// Inject Legend at the top if not CI
 	if !IsCI() {
 		legend := GetLegend()
@@ -400,53 +406,6 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 	fmt.Println(output)
 
 	// Render Vulnerability Notes
-	if len(vulnMap) > 0 {
-		fmt.Println()
-		fmt.Println(render(styleTitle, "VULNERABILITY NOTES"))
-		fmt.Println(render(styleChain, strings.Repeat("─", 40)))
-		for _, v := range vulnMap {
-			severity := ""
-			if v.Severity != "" {
-				severity = fmt.Sprintf(" [%s]", strings.ToUpper(v.Severity))
-			}
-
-			note := fmt.Sprintf("%s %s%s\n%s %s\n%s %s\n%s %s\n%s %s\n%s %s\n%s %s\n%s %s (Verified: 2026-02-03)\n%s %s",
-				render(styleCrit, "●"),
-				render(styleLabel, v.Label),
-				render(styleCrit, severity),
-				render(styleSubValue, "  Quick Ref:"),
-				render(styleSubValue.Copy().Faint(false), v.Description),
-				render(styleSubValue, "  Risk Rating:"),
-				render(styleSubValue.Copy().Faint(false), v.RiskRating),
-				render(styleSubValue, "  Risk Detail:"),
-				render(styleSubValue.Copy().Faint(false), v.Risk),
-				render(styleSubValue, "  Impact Rating:"),
-				render(styleSubValue.Copy().Faint(false), v.ImpactRating),
-				render(styleSubValue, "  Impact Detail:"),
-				render(styleSubValue.Copy().Faint(false), v.Impact),
-				render(styleSubValue, "  Complexity:"),
-				render(styleSubValue.Copy().Faint(false), v.Complexity),
-				render(styleSubValue, "  Exploited in Wild:"),
-				render(styleSubValue.Copy().Faint(false), v.Exploited),
-				render(styleSubValue, "  CVE:"),
-				render(styleSubValue.Copy().Underline(true), v.URL))
-
-			if v.ExploitURL != "" {
-				note += fmt.Sprintf("\n%s %s",
-					render(styleSubValue, "  Exploit Ref:"),
-					render(styleSubValue.Copy().Underline(true), v.ExploitURL))
-			}
-
-			if v.SecondaryURL != "" && v.SecondaryURL != v.ExploitURL {
-				note += fmt.Sprintf("\n%s %s",
-					render(styleSubValue, "  Research Ref:"),
-					render(styleSubValue.Copy().Underline(true), v.SecondaryURL))
-			}
-
-			fmt.Println(note)
-			fmt.Println()
-		}
-	}
 
 }
 
@@ -493,4 +452,95 @@ func GetLegend() string {
 
 	// Join horizontally with spacing
 	return lipgloss.JoinHorizontal(lipgloss.Top, strings.Join(nodes, "   "))
+}
+
+// RenderVulnerabilityCard creates a stylized card for a vulnerability
+func RenderVulnerabilityCard(v engine.Vulnerability) string {
+	if IsCI() {
+		// Plain text fallback
+		return fmt.Sprintf("VULN: %s [%s]\n  %s\n  Link: %s", v.Label, v.Severity, v.Description, v.URL)
+	}
+
+	// Determine color based on severity
+	borderColor := colorDim
+	titleColor := colorWhite
+	switch strings.ToLower(v.Severity) {
+	case "critical":
+		borderColor = colorRed
+		titleColor = colorRed
+	case "high":
+		borderColor = colorOrange
+		titleColor = colorOrange
+	case "medium":
+		borderColor = colorMagenta
+		titleColor = colorMagenta
+	}
+
+	// Styles
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Padding(0, 1).
+		Margin(0, 0, 1, 0).
+		Width(60)
+
+	titleStyle := lipgloss.NewStyle().Foreground(titleColor).Bold(true)
+	headerStyle := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Width(14)
+	valueStyle := lipgloss.NewStyle().Foreground(colorWhite)
+
+	// Content Construction
+
+	// Header Line: Label [SEVERITY]
+	headerLine := fmt.Sprintf("%s [%s]", titleStyle.Render(v.Label), strings.ToUpper(v.Severity))
+
+	// Body Lines
+	body := []string{
+		fmt.Sprintf("%s %s", headerStyle.Render("Quick Ref:"), valueStyle.Render(v.Description)),
+		fmt.Sprintf("%s %s", headerStyle.Render("Risk Rating:"), valueStyle.Render(v.RiskRating)),
+		fmt.Sprintf("%s %s", headerStyle.Render("Risk Detail:"), valueStyle.Render(v.Risk)),
+		fmt.Sprintf("%s %s", headerStyle.Render("Impact Rating:"), valueStyle.Render(v.ImpactRating)),
+		fmt.Sprintf("%s %s", headerStyle.Render("Impact Detail:"), valueStyle.Render(v.Impact)),
+		fmt.Sprintf("%s %s", headerStyle.Render("Exploited:"), valueStyle.Render(v.Exploited)),
+		fmt.Sprintf("%s %s", headerStyle.Render("CVE:"), lipgloss.NewStyle().Foreground(colorCyan).Underline(true).Render(v.URL)),
+	}
+
+	if v.ExploitURL != "" {
+		body = append(body, fmt.Sprintf("%s %s", headerStyle.Render("Exploit Ref:"), lipgloss.NewStyle().Foreground(colorCyan).Underline(true).Render(v.ExploitURL)))
+	}
+
+	content := lipgloss.JoinVertical(lipgloss.Left,
+		headerLine,
+		strings.Repeat("─", 58), // Separator
+		lipgloss.JoinVertical(lipgloss.Left, body...),
+	)
+
+	return boxStyle.Render(content)
+}
+
+// RenderVulnerabilitySection returns a slice of formatted strings for vulnerabilities
+func RenderVulnerabilitySection(vulnMap map[string]engine.Vulnerability) []string {
+	if len(vulnMap) == 0 {
+		return nil
+	}
+
+	var rows []string
+	rows = append(rows, "", render(styleTitle, "VULNERABILITY DOSSIERS"))
+
+	sep := strings.Repeat("─", 60)
+	if IsCI() {
+		sep = strings.Repeat("-", 60)
+	}
+	rows = append(rows, render(styleChain, sep))
+
+	// Sort IDs for deterministic output
+	ids := make([]string, 0, len(vulnMap))
+	for id := range vulnMap {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	for _, id := range ids {
+		rows = append(rows, RenderVulnerabilityCard(vulnMap[id]))
+	}
+	return rows
 }

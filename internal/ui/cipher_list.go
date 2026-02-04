@@ -5,14 +5,17 @@ import (
 	"fmt"
 	"snipher/internal/engine"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 func RenderCipherList() {
-	render(styleTitle, "SUPPORTED CIPHER SUITES")
+	title := render(styleTitle, "SUPPORTED CIPHER SUITES")
+
+	var rows []string
 
 	if !IsCI() {
-		fmt.Println(styleCard.Render(GetLegend()))
-		fmt.Println()
+		rows = append(rows, GetLegend(), "")
 	}
 
 	versions := []struct {
@@ -28,8 +31,13 @@ func RenderCipherList() {
 	vulnMap := make(map[string]engine.Vulnerability)
 
 	for _, v := range versions {
-		fmt.Println(render(styleLabel, v.name))
-		fmt.Println(render(styleChain, strings.Repeat("─", 40)))
+		rows = append(rows, render(styleLabel, v.name))
+
+		sep := strings.Repeat("─", 60)
+		if IsCI() {
+			sep = strings.Repeat("-", 60)
+		}
+		rows = append(rows, render(styleChain, sep))
 
 		ciphers := engine.GetAllCiphersForProtocol(v.ver)
 		for _, cipher := range ciphers {
@@ -47,56 +55,26 @@ func RenderCipherList() {
 				secInd = " " + secInd
 			}
 
-			fmt.Printf("  %s%s%s\n", render(cStyle, cipher), secInd, vulnLabels)
+			rows = append(rows, fmt.Sprintf("  %s%s%s", render(cStyle, cipher), secInd, vulnLabels))
 		}
-		fmt.Println()
+		rows = append(rows, "")
 	}
 
 	// Render Vulnerability Notes
 	if len(vulnMap) > 0 {
-		fmt.Println(render(styleTitle, "VULNERABILITY NOTES"))
-		fmt.Println(render(styleChain, strings.Repeat("─", 40)))
-		for _, v := range vulnMap {
-			severity := ""
-			if v.Severity != "" {
-				severity = fmt.Sprintf(" [%s]", strings.ToUpper(v.Severity))
-			}
-
-			note := fmt.Sprintf("%s %s%s\n%s %s\n%s %s\n%s %s\n%s %s\n%s %s\n%s %s\n%s %s (Verified: 2026-02-03)\n%s %s",
-				render(styleCrit, "●"),
-				render(styleLabel, v.Label),
-				render(styleCrit, severity),
-				render(styleSubValue, "  Quick Ref:"),
-				render(styleSubValue.Copy().Faint(false), v.Description),
-				render(styleSubValue, "  Risk Rating:"),
-				render(styleSubValue.Copy().Faint(false), v.RiskRating),
-				render(styleSubValue, "  Risk Detail:"),
-				render(styleSubValue.Copy().Faint(false), v.Risk),
-				render(styleSubValue, "  Impact Rating:"),
-				render(styleSubValue.Copy().Faint(false), v.ImpactRating),
-				render(styleSubValue, "  Impact Detail:"),
-				render(styleSubValue.Copy().Faint(false), v.Impact),
-				render(styleSubValue, "  Complexity:"),
-				render(styleSubValue.Copy().Faint(false), v.Complexity),
-				render(styleSubValue, "  Exploited in Wild:"),
-				render(styleSubValue.Copy().Faint(false), v.Exploited),
-				render(styleSubValue, "  CVE:"),
-				render(styleSubValue.Copy().Underline(true), v.URL))
-
-			if v.ExploitURL != "" {
-				note += fmt.Sprintf("\n%s %s",
-					render(styleSubValue, "  Exploit Ref:"),
-					render(styleSubValue.Copy().Underline(true), v.ExploitURL))
-			}
-
-			if v.SecondaryURL != "" && v.SecondaryURL != v.ExploitURL {
-				note += fmt.Sprintf("\n%s %s",
-					render(styleSubValue, "  Research Ref:"),
-					render(styleSubValue.Copy().Underline(true), v.SecondaryURL))
-			}
-
-			fmt.Println(note)
-			fmt.Println()
-		}
+		rows = append(rows, RenderVulnerabilitySection(vulnMap)...)
 	}
+
+	content := lipgloss.JoinVertical(lipgloss.Left, rows...)
+
+	// Apply card styling only if not in CI mode
+	output := lipgloss.JoinVertical(lipgloss.Left, title, content)
+	if !IsCI() {
+		output = styleCard.Render(output)
+	} else {
+		// In CI mode, add simple border
+		output = fmt.Sprintf("\n%s\n%s\n%s\n", strings.Repeat("=", 60), output, strings.Repeat("=", 60))
+	}
+
+	fmt.Println(output)
 }

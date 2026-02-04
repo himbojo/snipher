@@ -4,6 +4,19 @@ import (
 	"strings"
 )
 
+// Severity and Rating levels
+const (
+	SeverityLow      = "Low"
+	SeverityMedium   = "Medium"
+	SeverityHigh     = "High"
+	SeverityCritical = "Critical"
+
+	RatingLow      = "Low"
+	RatingMedium   = "Medium"
+	RatingHigh     = "High"
+	RatingCritical = "Critical"
+)
+
 type Vulnerability struct {
 	ID           string
 	Label        string
@@ -25,11 +38,11 @@ var (
 	VulnNoPFS = Vulnerability{
 		ID:           "NO_PFS",
 		Label:        "NO PFS",
-		Severity:     "Medium",
+		Severity:     SeverityMedium,
 		Description:  "Lack of Perfect Forward Secrecy allows retroactive decryption of captured traffic.",
-		RiskRating:   "High",
-		ImpactRating: "High",
-		Complexity:   "High",
+		RiskRating:   RatingHigh,
+		ImpactRating: RatingHigh,
+		Complexity:   RatingHigh,
 		Exploited:    "Yes (State Actors)",
 		ExploitURL:   "https://www.washingtonpost.com/world/national-security/nsa-collects-millions-of-e-mail-address-books-globally/2013/10/14/d3ad5986-34e8-11e3-80c6-7e6dd8d22d8f_story.html",
 		Risk:         "Retroactive decryption of session traffic",
@@ -40,11 +53,11 @@ var (
 	VulnPaddingOracle = Vulnerability{
 		ID:           "CBC_PADDING",
 		Label:        "PADDING ORACLE",
-		Severity:     "Critical",
+		Severity:     SeverityCritical,
 		Description:  "Side-channel attack on CBC padding allows full plaintext recovery.",
-		RiskRating:   "Critical",
-		ImpactRating: "Critical",
-		Complexity:   "Low",
+		RiskRating:   RatingCritical,
+		ImpactRating: RatingCritical,
+		Complexity:   RatingLow,
 		Exploited:    "Yes",
 		ExploitURL:   "https://github.com/mubix/cve-2016-2107",
 		Risk:         "Side-channel attack on CBC padding",
@@ -55,11 +68,11 @@ var (
 	VulnWeakHash = Vulnerability{
 		ID:           "WEAK_HASH",
 		Label:        "WEAK HASH",
-		Severity:     "High",
+		Severity:     SeverityHigh,
 		Description:  "Usage of SHA-1 or MD5 which are susceptible to collision attacks.",
-		RiskRating:   "High",
-		ImpactRating: "High",
-		Complexity:   "High",
+		RiskRating:   RatingHigh,
+		ImpactRating: RatingHigh,
+		Complexity:   RatingHigh,
 		Exploited:    "Yes (SHAttered)",
 		ExploitURL:   "https://shattered.io/",
 		Risk:         "Cryptographic collision attacks",
@@ -70,11 +83,11 @@ var (
 	VulnSweet32 = Vulnerability{
 		ID:           "SWEET32",
 		Label:        "SWEET32",
-		Severity:     "High",
+		Severity:     SeverityHigh,
 		Description:  "Birthday attack on 64-bit block ciphers like 3DES allowing cookie theft.",
-		RiskRating:   "Medium",
-		ImpactRating: "High",
-		Complexity:   "High",
+		RiskRating:   RatingMedium,
+		ImpactRating: RatingHigh,
+		Complexity:   RatingHigh,
 		Exploited:    "No (Limited demo)",
 		Risk:         "Birthday attack on 64-bit block ciphers",
 		Impact:       "Recovery of sensitive session data like cookies (Session Token Theft)",
@@ -84,11 +97,11 @@ var (
 	VulnRC4 = Vulnerability{
 		ID:           "RC4_INSECURE",
 		Label:        "INSECURE RC4",
-		Severity:     "Medium",
+		Severity:     SeverityMedium,
 		Description:  "RC4 keystream biases allow recovery of plaintext from long sessions.",
-		RiskRating:   "Medium",
-		ImpactRating: "Medium",
-		Complexity:   "Medium",
+		RiskRating:   RatingMedium,
+		ImpactRating: RatingMedium,
+		Complexity:   RatingMedium,
 		Exploited:    "Yes",
 		ExploitURL:   "https://www.rc4nomore.com/",
 		Risk:         "Keystream biases leading to plaintext recovery",
@@ -99,11 +112,11 @@ var (
 	VulnBarMitzvah = Vulnerability{
 		ID:           "BAR_MITZVAH",
 		Label:        "BAR MITZVAH",
-		Severity:     "Medium",
+		Severity:     SeverityMedium,
 		Description:  "RC4 vulnerability allowing prediction of initial keystream bytes.",
-		RiskRating:   "Medium",
-		ImpactRating: "Medium",
-		Complexity:   "Medium",
+		RiskRating:   RatingMedium,
+		ImpactRating: RatingMedium,
+		Complexity:   RatingMedium,
 		Exploited:    "Yes",
 		ExploitURL:   "https://www.blackhat.com/docs/asia-15/materials/asia-15-Mantins-Bar-Mitzvah-Surprise-Decrypting-SSL-Transactions-Using-Predictable-IV-In-RC4.pdf",
 		Risk:         "Prediction of RC4 initial keystream",
@@ -114,11 +127,11 @@ var (
 	VulnLogjam = Vulnerability{
 		ID:           "LOGJAM",
 		Label:        "LOGJAM",
-		Severity:     "Medium",
+		Severity:     SeverityMedium,
 		Description:  "Man-in-the-middle downgrade attack to export-grade Diffie-Hellman.",
-		RiskRating:   "Medium",
-		ImpactRating: "Medium",
-		Complexity:   "Medium",
+		RiskRating:   RatingMedium,
+		ImpactRating: RatingMedium,
+		Complexity:   RatingMedium,
 		Exploited:    "Yes",
 		ExploitURL:   "https://weakdh.org/",
 		Risk:         "Discrete logarithm computation on weak DH groups",
@@ -129,11 +142,11 @@ var (
 	VulnFreak = Vulnerability{
 		ID:           "FREAK",
 		Label:        "FREAK",
-		Severity:     "High",
+		Severity:     SeverityHigh,
 		Description:  "Downgrade attack to 512-bit export RSA allowing near real-time decryption.",
-		RiskRating:   "High",
-		ImpactRating: "High",
-		Complexity:   "Low",
+		RiskRating:   RatingHigh,
+		ImpactRating: RatingHigh,
+		Complexity:   RatingLow,
 		Exploited:    "Yes",
 		ExploitURL:   "https://mitls.org/pages/attacks/FREAK",
 		Risk:         "Downgrade to 512-bit export-grade RSA",

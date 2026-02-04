@@ -141,7 +141,6 @@ Test detection logic locally without external dependencies using our mock TLS se
 ## 🚀 Future Improvements
 
 
-- **Enhanced Dossier Cards**: Improve the TUI formatting for vulnerability data by wrapping intel in stylized cards with boxed attributes for better scannability.
 - **Automated Remediation Advice**: Contextual tips based on detected flaws.
 
 ## License

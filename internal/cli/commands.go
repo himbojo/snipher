@@ -72,7 +72,7 @@ func DefaultAction(c *cli.Context) error {
 	maxTimeout := c.Duration("max-timeout")
 
 	// 3. Execution
-	isInteractive := !isJSON && !isCI()
+	isInteractive := !isJSON && !ui.IsCI()
 	var progressChan chan string
 
 	if isInteractive {
@@ -151,25 +151,4 @@ func DefaultAction(c *cli.Context) error {
 	}
 
 	return nil
-}
-
-// isCI checks for common CI environment variables
-func isCI() bool {
-	ciVars := []string{
-		"CI",
-		"GITHUB_ACTIONS",
-		"GITLAB_CI",
-		"JENKINS_HOME",
-		"TRAVIS",
-		"CIRCLECI",
-		"BUILDKITE",
-		"DRONE",
-		"TF_BUILD",
-	}
-	for _, v := range ciVars {
-		if os.Getenv(v) != "" {
-			return true
-		}
-	}
-	return false
 }
