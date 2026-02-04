@@ -250,7 +250,7 @@ func GetCipherDisplayStatus(cipher string) (string, lipgloss.Style) {
 }
 
 // RenderProtocolMatrix displays the supported protocols in a table-like format
-func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
+func RenderProtocolMatrix(res models.ScanResult, verbose bool, mode string) {
 	title := render(styleTitle, "PROTOCOL MATRIX")
 	if IsCI() {
 		fmt.Println("PROTOCOL MATRIX")
@@ -330,6 +330,8 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 					frontInd = "✓"
 				}
 
+				displayName := engine.GetCipherDisplayName(cipher, mode)
+
 				// Security status (after name)
 				secInd, cipherStyle := GetCipherDisplayStatus(cipher)
 				if !isEnabled {
@@ -348,7 +350,7 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 					secInd = " " + secInd
 				}
 
-				cipherRow := fmt.Sprintf("  %s %s%s%s", frontInd, render(cipherStyle, cipher), secInd, vulnLabels)
+				cipherRow := fmt.Sprintf("  %s %s%s%s", frontInd, render(cipherStyle, displayName), secInd, vulnLabels)
 				rows = append(rows, cipherRow)
 			}
 		} else {
@@ -359,6 +361,9 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 					if i == len(p.Ciphers)-1 {
 						prefix = "    └─"
 					}
+
+					displayName := engine.GetCipherDisplayName(cipher, mode)
+
 					// Use shared logic for security status (after name)
 					secInd, cStyle := GetCipherDisplayStatus(cipher)
 
@@ -373,7 +378,7 @@ func RenderProtocolMatrix(res models.ScanResult, verbose bool) {
 						secInd = " " + secInd
 					}
 
-					cipherRow := fmt.Sprintf("%s %s%s%s", prefix, render(cStyle, cipher), secInd, vulnLabels)
+					cipherRow := fmt.Sprintf("%s %s%s%s", prefix, render(cStyle, displayName), secInd, vulnLabels)
 					rows = append(rows, cipherRow)
 				}
 			}

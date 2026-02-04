@@ -21,12 +21,18 @@ import (
 func DefaultAction(c *cli.Context) error {
 	// Handle --cipher-list flag
 	if c.Bool("cipher-list") {
-		ui.RenderCipherList()
+		mode := "iana"
+		if c.Bool("both") {
+			mode = "both"
+		} else if c.Bool("openssl") {
+			mode = "openssl"
+		}
+		ui.RenderCipherList(mode)
 		return nil
 	}
 
 	if c.NArg() < 1 {
-		return cli.Exit("Error: Target argument is required", 1)
+		return cli.ShowAppHelp(c)
 	}
 
 	target := c.Args().First()
@@ -68,6 +74,13 @@ func DefaultAction(c *cli.Context) error {
 		return fmt.Errorf("invalid target format '%s'. Did you mean '%s'?\n   Target must be a hostname or IP (e.g., google.com), not a URL.", target, cleanTarget)
 	}
 	isJSON := c.Bool("json")
+	mode := "iana"
+	if c.Bool("both") {
+		mode = "both"
+	} else if c.Bool("openssl") {
+		mode = "openssl"
+	}
+
 	minTimeout := c.Duration("min-timeout")
 	maxTimeout := c.Duration("max-timeout")
 
@@ -141,7 +154,7 @@ func DefaultAction(c *cli.Context) error {
 		// Render final output
 		ui.RenderTargetIntelligence(res, c.Bool("sans"))
 		ui.RenderCertificateIdentity(res, c.Bool("sans"))
-		ui.RenderProtocolMatrix(res, c.Bool("verbose"))
+		ui.RenderProtocolMatrix(res, c.Bool("verbose"), mode)
 	}
 
 	// Check for critical issues using centralized logic

@@ -48,32 +48,41 @@ go build -o snipher.exe ./cmd/snipher
 ```
 
 ## Usage
-
-```bash
-# Standard scan (shows enabled ciphers sorted by strength)
-./snipher google.com
-
-# Verbose mode (shows ALL ciphers with ✓/✗ indicators)
-./snipher google.com --verbose
-
-# Scan with custom CA bundle and SANs visible
-./snipher internal.local --ca-bundle ./root.pem --sans
-
-# JSON output for pipelines
-./snipher google.com --json
-
-# Scan slow servers with adaptive timeouts
-./snipher 3des.badssl.com --min-timeout 500ms --max-timeout 5s
-```
-
-### Flags
-- `--port, -p`: Select target port (default: 443).
-- `--verbose, -v`: Show all possible cipher suites for each enabled protocol with status indicators (✓ enabled, ✗ disabled).
-- `--json`: Output strict JSON schema for automation.
-- `--ca-bundle, --ca`: Path to custom CA PEM file for internal PKI validation.
-- `--sans`: Show Subject Alternative Names in certificate details.
-- `--min-timeout`: Initial timeout per cipher check (default: `2s`).
-- `--max-timeout`: Maximum timeout for cipher check retries (default: `10s`).
++
++```bash
++# Standard scan (shows enabled ciphers sorted by strength)
++./snipher google.com
++
++# Combined naming format (IANA / OpenSSL)
++./snipher google.com --both
++
++# Verbose mode with OpenSSL naming convention
++./snipher google.com --verbose --openssl
++
++# Scan with custom CA bundle and SANs visible
++./snipher internal.local --ca-bundle ./root.pem --sans
++
++# JSON output for pipelines
++./snipher google.com --json
++
++# Scan slow servers with adaptive timeouts
++./snipher 3des.badssl.com --min-timeout 500ms --max-timeout 5s
++
++# Display reference list of allSupported ciphers
++./snipher --cipher-list --both
++```
++
++### Flags
++- `--port, -p`: Select target port (default: 443).
++- `--verbose, -v`: Show all possible cipher suites for each enabled protocol with status indicators (✓ enabled, ✗ disabled).
++- `--both`: Show combined cipher names in `IANA / OpenSSL` format.
++- `--openssl`: Show cipher names in legacy OpenSSL format.
++- `--cipher-list`: Display a reference list of all supported ciphers and exit.
++- `--json`: Output strict JSON schema for automation.
++- `--ca-bundle, --ca`: Path to custom CA PEM file for internal PKI validation.
++- `--sans`: Show Subject Alternative Names in certificate details.
++- `--min-timeout`: Initial timeout per cipher check (default: `2s`).
++- `--max-timeout`: Maximum timeout for cipher check retries (default: `10s`).
 
 ## CI/CD Integration
 

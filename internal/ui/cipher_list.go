@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func RenderCipherList() {
+func RenderCipherList(mode string) {
 	title := render(styleTitle, "SUPPORTED CIPHER SUITES")
 
 	var rows []string
@@ -41,6 +41,8 @@ func RenderCipherList() {
 
 		ciphers := engine.GetAllCiphersForProtocol(v.ver)
 		for _, cipher := range ciphers {
+			displayName := engine.GetCipherDisplayName(cipher, mode)
+
 			// Use shared logic for security status (after name)
 			secInd, cStyle := GetCipherDisplayStatus(cipher)
 
@@ -55,7 +57,7 @@ func RenderCipherList() {
 				secInd = " " + secInd
 			}
 
-			rows = append(rows, fmt.Sprintf("  %s%s%s", render(cStyle, cipher), secInd, vulnLabels))
+			rows = append(rows, fmt.Sprintf("  %s%s%s", render(cStyle, displayName), secInd, vulnLabels))
 		}
 		rows = append(rows, "")
 	}

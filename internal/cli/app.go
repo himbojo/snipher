@@ -12,14 +12,23 @@ func NewApp() *cli.App {
 		Name:  "snipher",
 		Usage: "A rapid security tool for SSL/TLS inspection",
 		Description: `EXAMPLES:
-   # Standard scan
+   # Standard scan (Default IANA names)
    snipher google.com
 
-   # Verbose mode (show all supported/unsupported ciphers)
-   snipher google.com --verbose
+   # Combined naming (IANA / OpenSSL format)
+   snipher google.com --both
+
+   # Verbose mode with OpenSSL naming convention
+   snipher google.com --verbose --openssl
 
    # Scan custom port with JSON output
-   snipher localhost --port 8443 --json`,
+   snipher localhost:8443 --json
+
+   # Reference only: list all supported ciphers
+   snipher --cipher-list --both
+
+   # Custom PKI validation
+   snipher internal.local --ca-bundle ./root.pem --sans`,
 		Flags: []cli.Flag{
 			&cli.IntFlag{
 				Name:    "port",
@@ -58,6 +67,14 @@ func NewApp() *cli.App {
 			&cli.BoolFlag{
 				Name:  "cipher-list",
 				Usage: "Display supported ciphers that will be tested for each protocol",
+			},
+			&cli.BoolFlag{
+				Name:  "openssl",
+				Usage: "Display cipher names in OpenSSL format",
+			},
+			&cli.BoolFlag{
+				Name:  "both",
+				Usage: "Show both IANA and OpenSSL cipher names",
 			},
 		},
 		UseShortOptionHandling: true,
