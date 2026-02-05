@@ -27,11 +27,19 @@ func preprocessArgs(args []string) []string {
 	flags := []string{args[0]}
 	params := []string{}
 
+	// Boolean flags that don't take values
+	boolFlags := map[string]bool{
+		"--json":    true,
+		"--sans":    true,
+		"--verbose": true,
+		"-v":        true,
+	}
+
 	for i := 1; i < len(args); i++ {
 		if args[i][0] == '-' {
 			flags = append(flags, args[i])
-			// If it's a flag with a value (like --port 443), take the next arg too
-			if i+1 < len(args) && args[i+1][0] != '-' {
+			// Only consume next arg if this is NOT a boolean flag
+			if !boolFlags[args[i]] && i+1 < len(args) && args[i+1][0] != '-' {
 				flags = append(flags, args[i+1])
 				i++
 			}

@@ -40,7 +40,13 @@ func NewStdScanner(config ScannerConfig) *StdScanner {
 
 func (s *StdScanner) reportProgress(msg string) {
 	if s.config.ProgressChannel != nil {
-		s.config.ProgressChannel <- msg
+		// ✅ Fix #2: Use select to prevent panic on closed channel
+		select {
+		case s.config.ProgressChannel <- msg:
+			// Message sent successfully
+		case <-time.After(100 * time.Millisecond):
+			// Channel blocked or closed, skip message
+		}
 	}
 }
 
@@ -299,10 +305,28 @@ func (s *StdScanner) enumerateCiphers(target string, port int, version uint16) [
 	allCiphers := AllIANACiphers()
 	total := len(allCiphers)
 
-	// Concurrency control
-	sem := make(chan struct{}, 10) // Limit to 10 concurrent scans to avoid flooding
+	// ✅ Fix #1: Use worker pool pattern to limit concurrent goroutines
+	maxWorkers := 10
+	cipherQueue := make(chan IANACipher, total)
 	var wg sync.WaitGroup
 
+	// Start worker pool
+	for i := 0; i < maxWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for cipher := range cipherQueue {
+				isSupported, err := checkCipherSupport(address, cipher.ID, target, version)
+				if err == nil && isSupported {
+					mu.Lock()
+					supported = append(supported, cipher.Name)
+					mu.Unlock()
+				}
+			}
+		}()
+	}
+
+	// Send ciphers to queue and report progress
 	for i, cipher := range allCiphers {
 		if i%20 == 0 { // Update progress less frequently
 			verStr := "Unknown"
@@ -316,24 +340,11 @@ func (s *StdScanner) enumerateCiphers(target string, port int, version uint16) [
 			}
 			s.reportProgress(fmt.Sprintf("Scanning %s ciphers (%d/%d)...", verStr, i, total))
 		}
-
-		wg.Add(1)
-		sem <- struct{}{} // Acquire semaphore
-
-		go func(c IANACipher) {
-			defer wg.Done()
-			defer func() { <-sem }() // Release semaphore
-
-			// Use the raw client logic
-			isSupported, err := checkCipherSupport(address, c.ID, target, version)
-			if err == nil && isSupported {
-				mu.Lock()
-				supported = append(supported, c.Name)
-				mu.Unlock()
-			}
-		}(cipher)
+		cipherQueue <- cipher
 	}
 
+	// Close queue and wait for workers to finish
+	close(cipherQueue)
 	wg.Wait()
 
 	// Sort by strength before returning

@@ -39,6 +39,10 @@ func DefaultAction(c *cli.Context) error {
 	if host, portStr, err := net.SplitHostPort(target); err == nil {
 		target = host
 		if p, err := strconv.Atoi(portStr); err == nil {
+			// ✅ Fix #6: Validate port range
+			if p < 1 || p > 65535 {
+				return fmt.Errorf("invalid port number: %d (must be 1-65535)", p)
+			}
 			// Only override if flag wasn't explicitly set.
 			// Since we can't easily check c.IsSet with urfave/cli v2 without iterating,
 			// we'll assume if the user typed google.com:8443, they mean 8443.
@@ -101,6 +105,7 @@ func DefaultAction(c *cli.Context) error {
 			r, err := scanner.Scan(context.Background(), target, port, c.String("ca-bundle"))
 			res = r
 			scanErr = err
+			close(progressChan) // ✅ Fix #3: Close channel to prevent goroutine leak
 
 			if err != nil {
 				p.Send(ui.ErrorMsg(err))
@@ -130,7 +135,11 @@ func DefaultAction(c *cli.Context) error {
 	if scanErr != nil {
 		if isJSON {
 			errorRes := map[string]string{"errors": scanErr.Error(), "host": target}
-			b, _ := json.Marshal(errorRes)
+			b, err := json.Marshal(errorRes) // ✅ Fix #8: Handle JSON marshaling errors
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to marshal error response: %v\n", err)
+				os.Exit(models.ExitOperational)
+			}
 			fmt.Println(string(b))
 		} else if !isInteractive { // If interactive, error was likely shown by TUI or handling logic above
 			fmt.Printf("Error: %v\n", scanErr)
@@ -142,7 +151,7 @@ func DefaultAction(c *cli.Context) error {
 	var complianceReport *models.ComplianceResult
 	if c.String("policy") != "" {
 		policy, err := engine.LoadPolicy(c.String("policy"))
-		if err != nil {
+		if err != nil || policy == nil { // ✅ Fix #7: Add nil pointer check
 			fmt.Printf("Policy Error: %v\n", err)
 			os.Exit(models.ExitOperational)
 		}
@@ -151,7 +160,11 @@ func DefaultAction(c *cli.Context) error {
 	}
 
 	if isJSON {
-		b, _ := json.MarshalIndent(res, "", "  ")
+		b, err := json.MarshalIndent(res, "", "  ") // ✅ Fix #5: Handle JSON marshaling errors
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to marshal scan result: %v\n", err)
+			os.Exit(models.ExitOperational)
+		}
 		fmt.Println(string(b))
 	} else {
 		// Render final output

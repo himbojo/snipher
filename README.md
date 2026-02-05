@@ -183,7 +183,7 @@ Test detection logic locally without external dependencies using our mock TLS se
 
 ## 🚀 Future Improvements
 
-
+- **Complete Adversiary Code Review**: Complete an adverserial code review.
 - **Automated Remediation Advice**: Contextual tips based on detected flaws.
 
 ## License
