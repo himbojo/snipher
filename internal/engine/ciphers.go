@@ -3,6 +3,7 @@ package engine
 import (
 	"crypto/tls"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -166,15 +167,11 @@ func GetAllCiphersForProtocol(version uint16) []string {
 }
 
 // sortCiphersByStrength sorts cipher names by security strength (strongest first)
+// ✅ Fix #10: Use efficient sort.Slice instead of O(n²) bubble sort
 func sortCiphersByStrength(ciphers []string) {
-	// Use a simple bubble sort with strength comparison
-	for i := 0; i < len(ciphers); i++ {
-		for j := i + 1; j < len(ciphers); j++ {
-			if cipherStrength(ciphers[j]) > cipherStrength(ciphers[i]) {
-				ciphers[i], ciphers[j] = ciphers[j], ciphers[i]
-			}
-		}
-	}
+	sort.Slice(ciphers, func(i, j int) bool {
+		return cipherStrength(ciphers[i]) > cipherStrength(ciphers[j])
+	})
 }
 
 // cipherStrength returns a numeric score for cipher strength (higher = stronger)

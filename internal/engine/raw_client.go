@@ -157,8 +157,10 @@ func checkCipherSupport(target string, cipherID uint16, hostname string, version
 	// 2. Construct ClientHello with SNI
 	clientHello := makeClientHello(cipherID, hostname, version)
 
-	// 3. Send ClientHello
+	// ✅ Fix #14: Set deadline BEFORE write operation
 	conn.SetDeadline(time.Now().Add(5 * time.Second))
+
+	// 3. Send ClientHello
 	_, err = conn.Write(clientHello)
 	if err != nil {
 		return false, fmt.Errorf("failed to send ClientHello: %w", err)

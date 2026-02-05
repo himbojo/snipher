@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"snipher/internal/models"
+	"strings"
 	"sync"
 	"time"
 )
@@ -74,7 +75,8 @@ func (s *StdScanner) Scan(ctx context.Context, target string, port int, caBundle
 	address := net.JoinHostPort(result.IP, fmt.Sprintf("%d", port))
 	start := time.Now()
 
-	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	// ✅ Fix #9: Use configured timeout instead of hardcoded value
+	dialer := &net.Dialer{Timeout: s.config.MinTimeout}
 
 	// We use InsecureSkipVerify: true to ensure we get the PeerCertificates
 	// even if validation fails. We will manually verify them afterwards.
@@ -116,6 +118,11 @@ func (s *StdScanner) Scan(ctx context.Context, target string, port int, caBundle
 			// Handle Custom CA Bundle
 			var bundleCerts []*x509.Certificate
 			if caBundlePath != "" {
+				// ✅ Fix #12: Validate CA bundle path to prevent path traversal
+				if strings.Contains(caBundlePath, "..") {
+					return result, fmt.Errorf("invalid CA bundle path: path traversal not allowed")
+				}
+
 				caData, err := os.ReadFile(caBundlePath)
 				if err != nil {
 					return result, fmt.Errorf("failed to read CA bundle at %s: %w", caBundlePath, err)
@@ -186,6 +193,12 @@ func (s *StdScanner) Scan(ctx context.Context, target string, port int, caBundle
 			if len(verifiedChains) > 0 {
 				chain := verifiedChains[0]
 				anchorRoot = chain[len(chain)-1]
+			}
+
+			// ✅ Fix #18: Limit certificate chain length to prevent DoS
+			const maxChainLength = 10
+			if len(state.PeerCertificates) > maxChainLength {
+				return result, fmt.Errorf("certificate chain too long: %d certificates (max %d)", len(state.PeerCertificates), maxChainLength)
 			}
 
 			// Map full chain
@@ -260,7 +273,8 @@ func (s *StdScanner) checkProtocols(ctx context.Context, target string, port int
 
 			s.reportProgress(fmt.Sprintf("Checking %s...", name))
 
-			dialer := &net.Dialer{Timeout: 2 * time.Second}
+			// ✅ Fix #9: Use configured timeout
+			dialer := &net.Dialer{Timeout: s.config.MinTimeout}
 			conf := &tls.Config{
 				ServerName:         target,
 				InsecureSkipVerify: true,
@@ -328,7 +342,8 @@ func (s *StdScanner) enumerateCiphers(target string, port int, version uint16) [
 
 	// Send ciphers to queue and report progress
 	for i, cipher := range allCiphers {
-		if i%20 == 0 { // Update progress less frequently
+		// ✅ Fix #15: Report progress every 10 ciphers instead of every 20
+		if i%10 == 0 {
 			verStr := "Unknown"
 			switch version {
 			case tls.VersionTLS10:
