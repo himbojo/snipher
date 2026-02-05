@@ -62,11 +62,11 @@ go build -o snipher.exe ./cmd/snipher
 # Verify against a corporate policy
 ./snipher production.internal --policy my-standard.yaml
 
-# Combined naming format (IANA / OpenSSL)
-./snipher google.com --both
+# Combined naming format (IANA / OpenSSL) via naming flag
+./snipher google.com --naming both
 
 # Verbose mode with OpenSSL naming convention
-./snipher google.com --verbose --openssl
+./snipher google.com --verbose --naming openssl
 
 # Scan with custom CA bundle and SANs visible
 ./snipher internal.local --ca-bundle ./root.pem --sans
@@ -78,21 +78,22 @@ go build -o snipher.exe ./cmd/snipher
 ./snipher 3des.badssl.com --min-timeout 500ms --max-timeout 5s
 
 # Display reference list of all supported ciphers
-./snipher --cipher-list --both
+./snipher list-ciphers --naming both
 ```
 
 ### Flags
 - `--port, -p`: Select target port (default: 443).
 - `--verbose, -v`: Show all possible cipher suites for each enabled protocol with status indicators (✓ enabled, ✗ disabled).
 - `--policy`: Path to a YAML policy file to verify against.
-- `--both`: Show combined cipher names in `IANA / OpenSSL` format.
-- `--openssl`: Show cipher names in legacy OpenSSL format.
-- `--cipher-list`: Display a reference list of all supported ciphers and exit.
+- `--naming`: Select cipher naming style: `iana` (default), `openssl`, or `both`.
 - `--json`: Output strict JSON schema for automation.
 - `--ca-bundle, --ca`: Path to custom CA PEM file for internal PKI validation.
 - `--sans`: Show Subject Alternative Names in certificate details.
 - `--min-timeout`: Initial timeout per cipher check (default: `2s`).
 - `--max-timeout`: Maximum timeout for cipher check retries (default: `10s`).
+
+### Commands
+- `list-ciphers`: Display a reference list of all supported ciphers and exit.
 
 ## Policy-Based Auditing
 

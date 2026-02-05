@@ -16,19 +16,27 @@ func NewApp() *cli.App {
    snipher google.com
 
    # Combined naming (IANA / OpenSSL format)
-   snipher google.com --both
+   snipher google.com --naming both
 
    # Verbose mode with OpenSSL naming convention
-   snipher google.com --verbose --openssl
+   snipher google.com --verbose --naming openssl
 
    # Scan custom port with JSON output
    snipher localhost:8443 --json
 
    # Reference only: list all supported ciphers
-   snipher --cipher-list --both
+   snipher list-ciphers --naming both
 
    # Custom PKI validation
    snipher internal.local --ca-bundle ./root.pem --sans`,
+		Commands: []*cli.Command{
+			{
+				Name:    "list-ciphers",
+				Aliases: []string{"l", "lc"},
+				Usage:   "Display a reference list of all supported ciphers and exit",
+				Action:  ListCiphersAction,
+			},
+		},
 		Flags: []cli.Flag{
 			&cli.IntFlag{
 				Name:    "port",
@@ -64,17 +72,10 @@ func NewApp() *cli.App {
 				Value: 10 * time.Second,
 				Usage: "Maximum timeout for cipher check retries",
 			},
-			&cli.BoolFlag{
-				Name:  "cipher-list",
-				Usage: "Display supported ciphers that will be tested for each protocol",
-			},
-			&cli.BoolFlag{
-				Name:  "openssl",
-				Usage: "Display cipher names in OpenSSL format",
-			},
-			&cli.BoolFlag{
-				Name:  "both",
-				Usage: "Show both IANA and OpenSSL cipher names",
+			&cli.StringFlag{
+				Name:  "naming",
+				Value: "iana",
+				Usage: "Cipher naming style: 'iana', 'openssl', 'both'",
 			},
 			&cli.StringFlag{
 				Name:    "policy",

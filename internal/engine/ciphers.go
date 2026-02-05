@@ -33,6 +33,60 @@ func IsRecommended(id uint16) bool {
 	return false
 }
 
+// IANACipher represents a cipher suite definition from IANA
+type IANACipher struct {
+	ID   uint16
+	Name string
+}
+
+// AllIANACiphers returns a comprehensive list of IANA cipher suites
+// This includes ciphers not supported by Go's crypto/tls, for manual scanning.
+func AllIANACiphers() []IANACipher {
+	return []IANACipher{
+		// TLS 1.3
+		{0x1301, "TLS_AES_128_GCM_SHA256"},
+		{0x1302, "TLS_AES_256_GCM_SHA384"},
+		{0x1303, "TLS_CHACHA20_POLY1305_SHA256"},
+		{0x1304, "TLS_AES_128_CCM_SHA256"},
+		{0x1305, "TLS_AES_128_CCM_8_SHA256"},
+
+		// TLS 1.2 ECDHE
+		{0xC02B, "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"},
+		{0xC02C, "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"},
+		{0xC02F, "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"},
+		{0xC030, "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"},
+		{0xCCA9, "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"},
+		{0xCCA8, "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"},
+		{0xC009, "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA"},
+		{0xC00A, "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA"},
+		{0xC013, "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA"},
+		{0xC014, "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA"},
+		{0xC023, "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256"},
+		{0xC027, "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256"},
+
+		// TLS 1.2 RSA
+		{0x009C, "TLS_RSA_WITH_AES_128_GCM_SHA256"},
+		{0x009D, "TLS_RSA_WITH_AES_256_GCM_SHA384"},
+		{0x002F, "TLS_RSA_WITH_AES_128_CBC_SHA"},
+		{0x0035, "TLS_RSA_WITH_AES_256_CBC_SHA"},
+		{0x003C, "TLS_RSA_WITH_AES_128_CBC_SHA256"},
+		{0x003D, "TLS_RSA_WITH_AES_256_CBC_SHA256"},
+
+		// Weak / Legacy (RC4, 3DES, CBC)
+		{0x000A, "TLS_RSA_WITH_3DES_EDE_CBC_SHA"},
+		{0xC012, "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA"},
+		{0x0005, "TLS_RSA_WITH_RC4_128_SHA"},
+		{0xC011, "TLS_ECDHE_RSA_WITH_RC4_128_SHA"},
+		{0x0004, "TLS_RSA_WITH_RC4_128_MD5"},
+
+		// DHE (Forward Secrecy, but often slow/deprecated)
+		{0x0033, "TLS_DHE_RSA_WITH_AES_128_CBC_SHA"},
+		{0x0039, "TLS_DHE_RSA_WITH_AES_256_CBC_SHA"},
+		{0x0067, "TLS_DHE_RSA_WITH_AES_128_CBC_SHA256"},
+		{0x006B, "TLS_DHE_RSA_WITH_AES_256_CBC_SHA256"},
+	}
+}
+
 // AllModernCiphers returns a list of all cipher suites known to the Go standard library
 func AllModernCiphers() []uint16 {
 	var ids []uint16

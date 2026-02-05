@@ -290,13 +290,21 @@ func (s *StdScanner) enumerateCiphers(target string, port int, version uint16) [
 
 	address := net.JoinHostPort(target, fmt.Sprintf("%d", port))
 	var supported []string
+	var mu sync.Mutex
 
-	// Brute-force: Try every known cipher individually
-	allCiphers := AllModernCiphers()
+	// For manual scanning, we use the IANA list for comprehensive coverage,
+	// OR we can just use the Go list depending on requirements.
+	// The Story says "comprehensive list of Cipher IDs (IANA)".
+	// So we should iterate AllIANACiphers().
+	allCiphers := AllIANACiphers()
 	total := len(allCiphers)
 
-	for i, cipherID := range allCiphers {
-		if i%5 == 0 { // Don't spam the channel, update every 5 ciphers
+	// Concurrency control
+	sem := make(chan struct{}, 10) // Limit to 10 concurrent scans to avoid flooding
+	var wg sync.WaitGroup
+
+	for i, cipher := range allCiphers {
+		if i%20 == 0 { // Update progress less frequently
 			verStr := "Unknown"
 			switch version {
 			case tls.VersionTLS10:
@@ -305,48 +313,28 @@ func (s *StdScanner) enumerateCiphers(target string, port int, version uint16) [
 				verStr = "TLS 1.1"
 			case tls.VersionTLS12:
 				verStr = "TLS 1.2"
-			case tls.VersionTLS13:
-				verStr = "TLS 1.3"
 			}
 			s.reportProgress(fmt.Sprintf("Scanning %s ciphers (%d/%d)...", verStr, i, total))
 		}
-		timeout := s.config.MinTimeout
 
-		// Adaptive retry loop
-		for timeout <= s.config.MaxTimeout {
-			dialer := &net.Dialer{Timeout: timeout}
-			conf := &tls.Config{
-				ServerName:         target,
-				InsecureSkipVerify: true,
-				MinVersion:         version,
-				MaxVersion:         version,
-				CipherSuites:       []uint16{cipherID}, // Check ONLY this cipher
+		wg.Add(1)
+		sem <- struct{}{} // Acquire semaphore
+
+		go func(c IANACipher) {
+			defer wg.Done()
+			defer func() { <-sem }() // Release semaphore
+
+			// Use the raw client logic
+			isSupported, err := checkCipherSupport(address, c.ID, target, version)
+			if err == nil && isSupported {
+				mu.Lock()
+				supported = append(supported, c.Name)
+				mu.Unlock()
 			}
-
-			conn, err := tls.DialWithDialer(dialer, "tcp", address, conf)
-			if err == nil {
-				// Handshake succeeded!
-				state := conn.ConnectionState()
-				suiteName := GetCipherSuiteName(state.CipherSuite)
-
-				// Double check it matches what we asked for (sanity check)
-				if state.CipherSuite == cipherID {
-					supported = append(supported, suiteName)
-				}
-				conn.Close()
-				break // Move to next cipher
-			} else {
-				// Check for timeout error
-				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-					// Exponential backoff
-					timeout *= 2
-					continue // Retry with longer timeout
-				}
-				// Other error (connection refused, etc.) - proceed to next cipher
-				break
-			}
-		}
+		}(cipher)
 	}
+
+	wg.Wait()
 
 	// Sort by strength before returning
 	sortCiphersByStrength(supported)

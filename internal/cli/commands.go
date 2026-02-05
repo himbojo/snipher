@@ -17,20 +17,16 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+// ListCiphersAction handles the list-ciphers subcommand
+func ListCiphersAction(c *cli.Context) error {
+	mode := c.String("naming")
+	ui.RenderCipherList(mode)
+	return nil
+}
+
 // DefaultAction is the handler for the main "snipher <target>" command
 func DefaultAction(c *cli.Context) error {
-	// Handle --cipher-list flag
-	if c.Bool("cipher-list") {
-		mode := "iana"
-		if c.Bool("both") {
-			mode = "both"
-		} else if c.Bool("openssl") {
-			mode = "openssl"
-		}
-		ui.RenderCipherList(mode)
-		return nil
-	}
-
+	// Legacy flag check or just standard execution
 	if c.NArg() < 1 {
 		return cli.ShowAppHelp(c)
 	}
@@ -74,12 +70,7 @@ func DefaultAction(c *cli.Context) error {
 		return fmt.Errorf("invalid target format '%s'. Did you mean '%s'?\n   Target must be a hostname or IP (e.g., google.com), not a URL.", target, cleanTarget)
 	}
 	isJSON := c.Bool("json")
-	mode := "iana"
-	if c.Bool("both") {
-		mode = "both"
-	} else if c.Bool("openssl") {
-		mode = "openssl"
-	}
+	mode := c.String("naming")
 
 	minTimeout := c.Duration("min-timeout")
 	maxTimeout := c.Duration("max-timeout")
