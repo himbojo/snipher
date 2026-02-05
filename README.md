@@ -14,7 +14,7 @@
 - **🔐 Cipher Suite Enumeration:**
   - **Strength-Based Sorting**: Ciphers displayed strongest-first (ECDHE+AES-256+GCM → RC4).
   - **Verbose Mode** (`--verbose`): Shows ALL possible ciphers with status indicators (`✓` enabled, `✗` disabled).
-  - **Reference Mode** (`--cipher-list`): View a standardized list of all supported ciphers by protocol.
+  - **Reference Mode** (`list-ciphers`): View a standardized list of all supported ciphers by protocol.
   - **Security Icons**: Clear visual indicators for weak (`⚠`) and critically insecure (`⊘`) ciphers.
 - **🔬 Deep Intel Vulnerability Reporting:**
   - **Standardized Ratings**: All vulnerabilities ranked on a `Low/Medium/High/Critical` scale.
