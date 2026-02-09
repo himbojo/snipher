@@ -22,6 +22,7 @@ dist/
 # Build artifacts
 bin/
 snipher.exe
+snipher-linux
 
 # Installer logs
 pip-log.txt

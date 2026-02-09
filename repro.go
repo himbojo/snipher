@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -21,11 +22,19 @@ func AllModernCiphers() []uint16 {
 }
 
 func main() {
-	target := "127.0.0.1"
-	port := 4443
-	address := fmt.Sprintf("%s:%d", target, port)
+	targetName := "localhost"
+	ips, err := net.LookupIP(targetName)
+	if err != nil {
+		fmt.Printf("Lookup failed: %v\n", err)
+		return
+	}
+	fmt.Printf("localhost resolves to: %v\n", ips)
 
-	fmt.Printf("Connecting to %s...\n", address)
+	// Force connection to localhost to see which IP is used if we just Dial "localhost"
+	// But repro previously used explicit IP.
+	// Let's test checking all IPs.
+
+	port := 4443
 
 	versions := []struct {
 		val  uint16
@@ -37,32 +46,52 @@ func main() {
 		{tls.VersionTLS13, "TLS 1.3"},
 	}
 
-	for _, v := range versions {
-		fmt.Printf("Testing %s...\n", v.name)
-		dialer := &net.Dialer{Timeout: 2 * time.Second}
-		conf := &tls.Config{
-			InsecureSkipVerify: true,
-			MinVersion:         v.val,
-			MaxVersion:         v.val,
-			CipherSuites:       AllModernCiphers(),
+	var wg sync.WaitGroup
+
+	for _, ip := range ips {
+		target := ip.String()
+		fmt.Printf("--- Testing target IP: %s ---\n", target)
+		address := fmt.Sprintf("[%s]:%d", target, port)
+		if ip.To4() != nil {
+			address = fmt.Sprintf("%s:%d", target, port)
 		}
 
-		// Use DialContext as in std_client.go
-		tlsDialer := &tls.Dialer{
-			NetDialer: dialer,
-			Config:    conf,
-		}
+		for _, v := range versions {
+			wg.Add(1)
+			go func(v struct {
+				val  uint16
+				name string
+			}, t string, addr string) {
+				defer wg.Done()
+				// fmt.Printf("Testing %s on %s...\n", v.name, t)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		conn, err := tlsDialer.DialContext(ctx, "tcp", address)
-		cancel()
+				dialer := &net.Dialer{Timeout: 2 * time.Second}
+				conf := &tls.Config{
+					InsecureSkipVerify: true,
+					MinVersion:         v.val,
+					MaxVersion:         v.val,
+					CipherSuites:       AllModernCiphers(),
+					ServerName:         targetName, // Send "localhost" as SNI
+				}
 
-		if err != nil {
-			fmt.Printf("  Failed: %v\n", err)
-		} else {
-			tlsConn := conn.(*tls.Conn)
-			fmt.Printf("  Success! Negotiated: %x\n", tlsConn.ConnectionState().CipherSuite)
-			tlsConn.Close()
+				tlsDialer := &tls.Dialer{
+					NetDialer: dialer,
+					Config:    conf,
+				}
+
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				conn, err := tlsDialer.DialContext(ctx, "tcp", addr)
+				cancel()
+
+				if err != nil {
+					// fmt.Printf("  %s (%s) Failed: %v\n", v.name, t, err)
+				} else {
+					tlsConn := conn.(*tls.Conn)
+					fmt.Printf("  %s (%s) Success! Negotiated: %x\n", v.name, t, tlsConn.ConnectionState().CipherSuite)
+					tlsConn.Close()
+				}
+			}(v, target, address)
 		}
 	}
+	wg.Wait()
 }
