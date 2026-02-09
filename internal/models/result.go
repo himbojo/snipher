@@ -44,4 +44,17 @@ type ScanResult struct {
 	// Error handling
 	Error    error  `json:"-"`
 	ErrorMsg string `json:"errors,omitempty"`
+
+	// Observability
+	Metrics *ScanMetrics `json:"metrics,omitempty"`
+}
+
+// ScanMetrics holds telemetry data about the scan
+type ScanMetrics struct {
+	StartTime      time.Time     `json:"start_time"`
+	EndTime        time.Time     `json:"end_time"`
+	Duration       time.Duration `json:"duration"`
+	CipherCount    int           `json:"cipher_count"`
+	HandshakeCount int           `json:"handshake_count"` // Estimated
+	ErrorCount     int           `json:"error_count"`
 }

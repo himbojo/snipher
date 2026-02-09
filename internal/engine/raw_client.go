@@ -1,11 +1,35 @@
 package engine
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
 	"time"
+)
+
+const (
+	// TLS Record Types
+	recordTypeHandshake = 0x16
+
+	// Handshake Types
+	handshakeTypeClientHello = 0x01
+
+	// TLS Versions
+	tlsVersion10 = 0x0301
+
+	// Lengths
+	randomBytesLength = 32
+	sessionIDLength   = 0
+	cipherSuitesLen   = 2 // 1 cipher * 2 bytes
+	compressionLen    = 1
+
+	// Values
+	randomByteVal    = 0xAA
+	compressionNull  = 0x00
+	extensionTypeSNI = 0x0000
+	sniTypeHostName  = 0x00
 )
 
 // makeClientHello constructs a raw ClientHello message with the specified cipher ID, SNI, and protocol version.
@@ -20,17 +44,17 @@ func makeClientHello(cipherID uint16, hostname string, version uint16) []byte {
 	// unless the server requires unique randoms for replay protection (rare for just ClientHello).
 	// Let's use a static random for stability/determinism in tests.
 	// 0xAA...AA
-	randomBytes := make([]byte, 32)
+	randomBytes := make([]byte, randomBytesLength)
 	for i := range randomBytes {
-		randomBytes[i] = 0xAA
+		randomBytes[i] = randomByteVal
 	}
 	handshakeBody = append(handshakeBody, randomBytes...)
 
 	// Session ID Length (0)
-	handshakeBody = append(handshakeBody, 0x00)
+	handshakeBody = append(handshakeBody, byte(sessionIDLength))
 
 	// Cipher Suites Length (2 bytes) -> Value: 2 bytes (1 cipher)
-	handshakeBody = append(handshakeBody, 0x00, 0x02)
+	handshakeBody = append(handshakeBody, 0x00, byte(cipherSuitesLen))
 
 	// Cipher Suite (The one we are probing)
 	cs := make([]byte, 2)
@@ -38,7 +62,7 @@ func makeClientHello(cipherID uint16, hostname string, version uint16) []byte {
 	handshakeBody = append(handshakeBody, cs...)
 
 	// Compression Methods (1 byte len) -> Value: 0x00 (Null)
-	handshakeBody = append(handshakeBody, 0x01, 0x00)
+	handshakeBody = append(handshakeBody, byte(compressionLen), compressionNull)
 
 	// --- Extensions ---
 	// Start of Extensions block
@@ -98,7 +122,7 @@ func makeClientHello(cipherID uint16, hostname string, version uint16) []byte {
 	sniContent = append(sniContent, listLenBytes...)
 
 	// Type (0x00 for HostName)
-	sniContent = append(sniContent, 0x00)
+	sniContent = append(sniContent, sniTypeHostName)
 
 	// Name Length
 	nameLenBytes := make([]byte, 2)
@@ -109,7 +133,7 @@ func makeClientHello(cipherID uint16, hostname string, version uint16) []byte {
 	sniContent = append(sniContent, []byte(hostname)...)
 
 	// Append SNI extension container
-	extensionsBody = append(extensionsBody, 0x00, 0x00) // Type
+	extensionsBody = append(extensionsBody, byte(extensionTypeSNI>>8), byte(extensionTypeSNI)) // Type
 	extLenBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(extLenBytes, uint16(len(sniContent)))
 	extensionsBody = append(extensionsBody, extLenBytes...)
@@ -125,7 +149,7 @@ func makeClientHello(cipherID uint16, hostname string, version uint16) []byte {
 	// --- Handshake Header ---
 	// Msg Type (0x01 ClientHello)
 	// Message Length (3 bytes)
-	handshakeHeader := []byte{0x01, 0x00}
+	handshakeHeader := []byte{handshakeTypeClientHello, 0x00}
 	msgLenBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(msgLenBytes, uint16(len(handshakeBody)))
 	handshakeHeader = append(handshakeHeader, msgLenBytes...)
@@ -136,7 +160,7 @@ func makeClientHello(cipherID uint16, hostname string, version uint16) []byte {
 	// Content Type (0x16 Handshake)
 	// Version (0x0301 - TLS 1.0 framing for compatibility)
 	// Length (2 bytes)
-	recordHeader := []byte{0x16, 0x03, 0x01}
+	recordHeader := []byte{recordTypeHandshake, byte(tlsVersion10 >> 8), byte(tlsVersion10 & 0xFF)}
 	recLen := make([]byte, 2)
 	binary.BigEndian.PutUint16(recLen, uint16(len(fullHandshake)))
 	recordHeader = append(recordHeader, recLen...)
@@ -146,9 +170,31 @@ func makeClientHello(cipherID uint16, hostname string, version uint16) []byte {
 
 // checkCipherSupport probes the target for support of the given cipher ID with specific protocol version.
 // It returns true if the server accepts the cipher, false otherwise.
-func checkCipherSupport(target string, cipherID uint16, hostname string, version uint16) (bool, error) {
-	// 1. Connect via TCP
-	conn, err := net.DialTimeout("tcp", target, 5*time.Second)
+func checkCipherSupport(ctx context.Context, target string, cipherID uint16, hostname string, version uint16) (bool, error) {
+	// 1. Connect via TCP with Retry (3 attempts)
+	var conn net.Conn
+	var err error
+	maxRetries := 3
+	d := net.Dialer{Timeout: 5 * time.Second}
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Check context before dialing
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
+
+		conn, err = d.DialContext(ctx, "tcp", target)
+		if err == nil {
+			break
+		}
+		// Exponential backoff: 500ms, 1s, 2s...
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		case <-time.After(time.Duration(500*(1<<attempt)) * time.Millisecond):
+			// continue
+		}
+	}
 	if err != nil {
 		return false, err
 	}

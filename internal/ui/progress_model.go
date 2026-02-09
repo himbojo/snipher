@@ -6,7 +6,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // ProgressMsg is sent when the scanner reports a new status
@@ -26,17 +25,11 @@ type ProgressModel struct {
 	err      error
 }
 
-var (
-	textStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FFFF")).Render // Cyan
-	spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF00FF"))        // Magenta
-	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Render // Lime
-)
-
 // NewProgressModel creates a new progress model
 func NewProgressModel() ProgressModel {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	s.Style = spinnerStyle
+	s.Style = GetStyles().Value // Use Value style (cyan/white)
 	return ProgressModel{
 		spinner: s,
 		message: "Initializing...",
@@ -79,7 +72,7 @@ func (m ProgressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m ProgressModel) View() string {
 	if m.err != nil {
-		return fmt.Sprintf("\n%s\n", lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(fmt.Sprintf("Error: %v", m.err)))
+		return fmt.Sprintf("\n%s\n", GetStyles().Critical.Render(fmt.Sprintf("Error: %v", m.err)))
 	}
 	if m.quitting {
 		return ""
@@ -88,7 +81,7 @@ func (m ProgressModel) View() string {
 	// Create a "cool" header/frame
 	pad := strings.Repeat(" ", 2)
 	spin := m.spinner.View()
-	msg := textStyle(m.message)
+	msg := GetStyles().Value.Render(m.message)
 
 	return fmt.Sprintf("\n%s%s %s\n", pad, spin, msg)
 }

@@ -156,7 +156,8 @@ var (
 	}
 )
 
-// GetCipherVulnerabilities returns a list of vulnerabilities associated with a cipher suite name
+// GetCipherVulnerabilities analyzes a cipher suite name and returns a list of potential
+// vulnerabilities associated with it, such as weak encryption, missing forward secrecy, or known exploits.
 func GetCipherVulnerabilities(cipher string) []Vulnerability {
 	var vulns []Vulnerability
 	cipherLower := strings.ToLower(cipher)

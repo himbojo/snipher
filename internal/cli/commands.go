@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -102,7 +101,7 @@ func DefaultAction(c *cli.Context) error {
 
 		// 1. Run Scan in background
 		go func() {
-			r, err := scanner.Scan(context.Background(), target, port, c.String("ca-bundle"))
+			r, err := scanner.Scan(c.Context, target, port, c.String("ca-bundle"))
 			res = r
 			scanErr = err
 			close(progressChan) // ✅ Fix #3: Close channel to prevent goroutine leak
@@ -128,7 +127,7 @@ func DefaultAction(c *cli.Context) error {
 		}
 	} else {
 		// --- Non-interactive Mode (Blocking) ---
-		res, scanErr = scanner.Scan(context.Background(), target, port, c.String("ca-bundle"))
+		res, scanErr = scanner.Scan(c.Context, target, port, c.String("ca-bundle"))
 	}
 
 	// 4. Handle Results

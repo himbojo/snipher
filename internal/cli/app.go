@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"snipher/internal/ui"
+	"snipher/internal/utils"
 	"time"
 
 	"github.com/urfave/cli/v2"
@@ -82,8 +84,27 @@ func NewApp() *cli.App {
 				Usage:   "Path to a YAML policy file to verify against",
 				Aliases: []string{"poll"},
 			},
+			&cli.BoolFlag{
+				Name:  "debug",
+				Usage: "Enable debug logging to file",
+			},
+			&cli.StringFlag{
+				Name:  "log-file",
+				Value: "snipher.log",
+				Usage: "File path for debug logs",
+			},
+			&cli.StringFlag{
+				Name:  "theme",
+				Value: "default",
+				Usage: "UI Theme (default, dark, light, no-color)",
+			},
 		},
 		UseShortOptionHandling: true,
-		Action:                 DefaultAction,
+		Before: func(c *cli.Context) error {
+			utils.InitLogger(c.Bool("debug"), c.String("log-file"))
+			ui.SetTheme(c.String("theme"))
+			return nil
+		},
+		Action: DefaultAction,
 	}
 }

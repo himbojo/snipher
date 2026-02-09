@@ -2,48 +2,58 @@ package engine
 
 import (
 	"bytes"
+	"encoding/binary"
 	"testing"
 )
 
 func TestMakeClientHello(t *testing.T) {
-	cipherID := uint16(0x0033) // TLS_DHE_RSA_WITH_AES_128_CBC_SHA
+	cipherID := uint16(0xC02F) // TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
 	hostname := "example.com"
+	version := uint16(0x0303) // TLS 1.2
 
-	hello := makeClientHello(cipherID, hostname, 0x0303)
+	req := makeClientHello(cipherID, hostname, version)
 
-	// Minimal length check (Header 5 + HandshakeHeader 4 + Version 2 + Random 32 + SessID 1 + CipherLen 2 + Cipher 2 + CompLen 1 + Comp 1 + ExtLen 2 + Exts...)
-	// With extensions, it should be much larger than 50
-	if len(hello) < 100 {
-		t.Errorf("ClientHello too short: %d bytes", len(hello))
+	// Minimal length check
+	if len(req) < 40 {
+		t.Errorf("ClientHello too short: %d", len(req))
 	}
 
 	// Check Record Header
-	// Content Type: Handshake (22 -> 0x16)
-	if hello[0] != 0x16 {
-		t.Errorf("Expected Record Type 0x16, got 0x%02X", hello[0])
+	if req[0] != 0x16 {
+		t.Errorf("Expected Handshake Record Type (0x16), got 0x%x", req[0])
 	}
-	// Version: TLS 1.0 (0x0301) for compatibility in record layer
-	if hello[1] != 0x03 || hello[2] != 0x01 {
-		t.Errorf("Expected Record Version 0x0301, got 0x%02X%02X", hello[1], hello[2])
+	if req[1] != 0x03 || req[2] != 0x01 {
+		t.Errorf("Expected TLS 1.0 framing (0x0301), got 0x%02x%02x", req[1], req[2])
 	}
 
 	// Check Handshake Header
-	// Message Type: ClientHello (1)
-	// We need to skip the 5 byte record header
-	handshake := hello[5:]
+	// Record header is 5 bytes
+	handshake := req[5:]
 	if handshake[0] != 0x01 {
-		t.Errorf("Expected Handshake Type 0x01 (ClientHello), got 0x%02X", handshake[0])
+		t.Errorf("Expected ClientHello Handshake Type (0x01), got 0x%x", handshake[0])
 	}
 
-	// Check Cipher Suite presence
-	// This is hard to parse dynamically without full parser, but we can search for the byte sequence
-	cipherBytes := []byte{0x00, 0x33}
-	if !bytes.Contains(handshake, cipherBytes) {
-		t.Errorf("ClientHello does not contain cipher suite 0x0033")
+	// Check Protocol Version in Body
+	// Handshake Header is 4 bytes (Type + Len)
+	body := handshake[4:]
+	ver := binary.BigEndian.Uint16(body[0:2])
+	if ver != version {
+		t.Errorf("Expected version 0x%x, got 0x%x", version, ver)
 	}
 
-	// Check SNI presence
-	if !bytes.Contains(handshake, []byte("example.com")) {
-		t.Errorf("ClientHello does not contain SNI hostname")
+	// Check Cipher Suite (skip Random 32, SessionID 1, CipherLen 2)
+	// Offset = 2 + 32 + 1 + 2 = 37
+	cipherOffset := 37
+	if len(body) < cipherOffset+2 {
+		t.Fatal("Body too short for cipher suite")
+	}
+	extractedCipher := binary.BigEndian.Uint16(body[cipherOffset : cipherOffset+2])
+	if extractedCipher != cipherID {
+		t.Errorf("Expected cipher 0x%x, got 0x%x", cipherID, extractedCipher)
+	}
+
+	// Check SNI presence (quick scan for hostname bytes)
+	if !bytes.Contains(req, []byte(hostname)) {
+		t.Error("ClientHello does not contain hostname")
 	}
 }

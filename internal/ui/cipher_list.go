@@ -10,7 +10,8 @@ import (
 )
 
 func RenderCipherList(mode string) {
-	title := render(styleTitle, "SUPPORTED CIPHER SUITES")
+	styles := GetStyles()
+	title := render(styles.Title, "SUPPORTED CIPHER SUITES")
 
 	var rows []string
 
@@ -31,13 +32,13 @@ func RenderCipherList(mode string) {
 	vulnMap := make(map[string]engine.Vulnerability)
 
 	for _, v := range versions {
-		rows = append(rows, render(styleLabel, v.name))
+		rows = append(rows, render(styles.Label, v.name))
 
 		sep := strings.Repeat("─", 60)
 		if IsCI() {
 			sep = strings.Repeat("-", 60)
 		}
-		rows = append(rows, render(styleChain, sep))
+		rows = append(rows, render(styles.Chain, sep))
 
 		ciphers := engine.GetAllCiphersForProtocol(v.ver)
 		for _, cipher := range ciphers {
@@ -47,11 +48,12 @@ func RenderCipherList(mode string) {
 			secInd, cStyle := GetCipherDisplayStatus(cipher)
 
 			vulns := engine.GetCipherVulnerabilities(cipher)
-			vulnLabels := ""
+			var vulnBuilder strings.Builder
 			for _, v := range vulns {
-				vulnLabels += fmt.Sprintf(" %s", render(getTagStyle("VULN", v.Severity), v.Label))
+				vulnBuilder.WriteString(fmt.Sprintf(" %s", render(getTagStyle("VULN", v.Severity), v.Label)))
 				vulnMap[v.ID] = v
 			}
+			vulnLabels := vulnBuilder.String()
 
 			if secInd != "" {
 				secInd = " " + secInd
@@ -72,7 +74,7 @@ func RenderCipherList(mode string) {
 	// Apply card styling only if not in CI mode
 	output := lipgloss.JoinVertical(lipgloss.Left, title, content)
 	if !IsCI() {
-		output = styleCard.Render(output)
+		output = styles.Card.Render(output)
 	} else {
 		// In CI mode, add simple border
 		output = fmt.Sprintf("\n%s\n%s\n%s\n", strings.Repeat("=", 60), output, strings.Repeat("=", 60))

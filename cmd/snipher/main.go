@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"snipher/internal/cli"
 	"snipher/internal/models"
+	"syscall"
 )
 
 func main() {
@@ -18,7 +21,11 @@ func main() {
 		args = preprocessArgs(args)
 	}
 
-	if err := app.Run(args); err != nil {
+	// ✅ Fix #30: Graceful Shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := app.RunContext(ctx, args); err != nil {
 		handleError(err)
 	}
 }
@@ -33,6 +40,9 @@ func preprocessArgs(args []string) []string {
 		"--sans":    true,
 		"--verbose": true,
 		"-v":        true,
+		"--debug":   true,
+		"--help":    true,
+		"-h":        true,
 	}
 
 	for i := 1; i < len(args); i++ {

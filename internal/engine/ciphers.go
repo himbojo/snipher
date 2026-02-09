@@ -103,7 +103,7 @@ func AllModernCiphers() []uint16 {
 // GetAllCiphersForProtocol returns all possible cipher names for a given protocol version
 // sorted by strength (strongest first)
 // GetAllCiphersForProtocol returns all possible cipher names for a given protocol version
-// sorted by strength (strongest first)
+// sorted by strength (strongest first).
 func GetAllCiphersForProtocol(version uint16) []string {
 	// TLS 1.3 has a fixed set of ciphers
 	if version == tls.VersionTLS13 {
@@ -174,7 +174,6 @@ func sortCiphersByStrength(ciphers []string) {
 	})
 }
 
-// cipherStrength returns a numeric score for cipher strength (higher = stronger)
 // cipherStrength returns a numeric score for cipher strength based on the rubric:
 // Protocol Support (handled implicitly by list context): 30%
 // Key Exchange: 30% (ECDHE/DHE=100%, RSA=60%)

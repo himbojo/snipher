@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"snipher/internal/models"
+	"snipher/internal/utils"
 	"strings"
 	"sync"
 	"time"
@@ -53,13 +54,22 @@ func (s *StdScanner) reportProgress(msg string) {
 
 // Scan performs a basic TCP connectivity check and TLS certificate extraction
 func (s *StdScanner) Scan(ctx context.Context, target string, port int, caBundlePath string) (models.ScanResult, error) {
+	utils.Log().Info("Starting scan", "target", target, "port", port)
 	s.reportProgress(fmt.Sprintf("Connecting to %s:%d...", target, port))
 
 	result := models.ScanResult{
 		Target:    target,
 		Port:      port,
 		Timestamp: time.Now(),
+		Metrics: &models.ScanMetrics{
+			StartTime: time.Now(),
+		},
 	}
+	defer func() {
+		result.Metrics.EndTime = time.Now()
+		result.Metrics.Duration = result.Metrics.EndTime.Sub(result.Metrics.StartTime)
+		utils.Log().Info("Scan completed", "duration", result.Metrics.Duration, "ciphers", result.Metrics.CipherCount, "errors", result.Metrics.ErrorCount)
+	}()
 
 	// 1. DNS Resolution
 	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", target)
@@ -248,6 +258,17 @@ func (s *StdScanner) Scan(ctx context.Context, target string, port int, caBundle
 
 	result.Protocols = append([]models.ProtocolDetails{}, modern...)
 
+	// Populate Metrics
+	cipherCount := 0
+	for _, p := range result.Protocols {
+		cipherCount += len(p.Ciphers)
+	}
+	result.Metrics.CipherCount = cipherCount
+	result.Metrics.HandshakeCount = len(result.Protocols) + 1 // +1 for initial connectivity check
+	if result.Error != nil {
+		result.Metrics.ErrorCount++
+	}
+
 	return result, nil
 }
 
@@ -271,6 +292,11 @@ func (s *StdScanner) checkProtocols(ctx context.Context, target string, port int
 		go func(idx int, version uint16, name string) {
 			defer wg.Done()
 
+			// Check context before starting
+			if ctx.Err() != nil {
+				return
+			}
+
 			s.reportProgress(fmt.Sprintf("Checking %s...", name))
 
 			// ✅ Fix #9: Use configured timeout
@@ -283,13 +309,19 @@ func (s *StdScanner) checkProtocols(ctx context.Context, target string, port int
 				CipherSuites:       AllModernCiphers(), // Include all ciphers for initial check
 			}
 
-			conn, err := tls.DialWithDialer(dialer, "tcp", address, conf)
+			// Use tls.Dialer for context awareness
+			tlsDialer := &tls.Dialer{
+				NetDialer: dialer,
+				Config:    conf,
+			}
+
+			conn, err := tlsDialer.DialContext(ctx, "tcp", address)
 			if err == nil {
 				conn.Close()
 				results[idx] = models.ProtocolDetails{
 					Name:      name,
 					Supported: true,
-					Ciphers:   s.enumerateCiphers(target, port, version),
+					Ciphers:   s.enumerateCiphers(ctx, target, port, version),
 				}
 			} else {
 				results[idx] = models.ProtocolDetails{Name: name, Supported: false}
@@ -302,10 +334,10 @@ func (s *StdScanner) checkProtocols(ctx context.Context, target string, port int
 }
 
 // enumerateCiphers identifies all supported ciphers for a specific protocol version
-func (s *StdScanner) enumerateCiphers(target string, port int, version uint16) []string {
+func (s *StdScanner) enumerateCiphers(ctx context.Context, target string, port int, version uint16) []string {
 	// TLS 1.3 requires special handling
 	if version == tls.VersionTLS13 {
-		return s.enumerateTLS13Ciphers(target, port)
+		return s.enumerateTLS13Ciphers()
 	}
 
 	address := net.JoinHostPort(target, fmt.Sprintf("%d", port))
@@ -329,19 +361,40 @@ func (s *StdScanner) enumerateCiphers(target string, port int, version uint16) [
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for cipher := range cipherQueue {
-				isSupported, err := checkCipherSupport(address, cipher.ID, target, version)
-				if err == nil && isSupported {
-					mu.Lock()
-					supported = append(supported, cipher.Name)
-					mu.Unlock()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case cipher, ok := <-cipherQueue:
+					if !ok {
+						return
+					}
+					isSupported, err := checkCipherSupport(ctx, address, cipher.ID, target, version)
+					if err == nil && isSupported {
+						mu.Lock()
+						supported = append(supported, cipher.Name)
+						mu.Unlock()
+					}
+					// Increment Metrics via atomic or mutex if we had access to result.Metrics here.
+					// Since enumerateCiphers doesn't have access to result.Metrics, we can return counts or just count supported.
+					// Reviewing the Metrics struct: CipherCount usually means *checked* or *found*?
+					// "CipherCount" usually implies count of supported ciphers found.
+					// I'll update the caller (Scan) to set CipherCount based on returned list length.
 				}
 			}
 		}()
 	}
 
+Loop:
 	// Send ciphers to queue and report progress
 	for i, cipher := range allCiphers {
+		// Check for cancellation
+		select {
+		case <-ctx.Done():
+			break Loop
+		default:
+		}
+
 		// ✅ Fix #15: Report progress every 10 ciphers instead of every 20
 		if i%10 == 0 {
 			verStr := "Unknown"
@@ -353,7 +406,7 @@ func (s *StdScanner) enumerateCiphers(target string, port int, version uint16) [
 			case tls.VersionTLS12:
 				verStr = "TLS 1.2"
 			}
-			s.reportProgress(fmt.Sprintf("Scanning %s ciphers (%d/%d)...", verStr, i, total))
+			s.reportProgress(fmt.Sprintf("Scanning %s ciphers (%d/%d)...", verStr, uint64(i), uint64(total)))
 		}
 		cipherQueue <- cipher
 	}
@@ -370,7 +423,7 @@ func (s *StdScanner) enumerateCiphers(target string, port int, version uint16) [
 // enumerateTLS13Ciphers handles TLS 1.3 cipher enumeration
 // TLS 1.3 ciphers cannot be restricted via CipherSuites in Go's crypto/tls
 // So we return all standard TLS 1.3 ciphers as potentially supported
-func (s *StdScanner) enumerateTLS13Ciphers(target string, port int) []string {
+func (s *StdScanner) enumerateTLS13Ciphers() []string {
 	// For TLS 1.3, Go's crypto/tls doesn't allow client-side cipher restriction
 	// The server always chooses from its supported set
 	// We'll return the standard TLS 1.3 cipher suites in strength order
