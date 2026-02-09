@@ -101,7 +101,10 @@ func (s *StdScanner) Scan(ctx context.Context, target string, port int, caBundle
 		// and IP resolution info. We'll store the error for potential reporting.
 		result.Error = err
 	} else {
-		defer conn.Close()
+		// We must close the connection *before* starting protocol enumeration
+		// because single-threaded servers (like our Python test server) will block
+		// subsequent connections until this one is closed.
+		conn.Close()
 		result.Latency = time.Since(start)
 
 		s.reportProgress("Retrieving certificate chain...")
@@ -318,12 +321,14 @@ func (s *StdScanner) checkProtocols(ctx context.Context, target string, port int
 			conn, err := tlsDialer.DialContext(ctx, "tcp", address)
 			if err == nil {
 				conn.Close()
+				utils.Log().Debug("Protocol check success", "protocol", name, "version", version)
 				results[idx] = models.ProtocolDetails{
 					Name:      name,
 					Supported: true,
 					Ciphers:   s.enumerateCiphers(ctx, target, port, version),
 				}
 			} else {
+				utils.Log().Debug("Protocol check failed", "protocol", name, "version", version, "error", err)
 				results[idx] = models.ProtocolDetails{Name: name, Supported: false}
 			}
 		}(i, v.val, v.name)

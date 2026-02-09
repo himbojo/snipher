@@ -10,7 +10,7 @@
 ## Features
 
 - **🛡️ Protocol Enumeration:** Parallel detection of TLS 1.0, 1.1, 1.2, and 1.3.
-- **� Modern Focus:** Explicitly drops support for SSLv2/v3 to encourage modern security standards and tool safety.
+- **📚 Complete IANA Cipher Coverage:** Comprehensive scanning support for all IANA-registered cipher suites including legacy SSLv2/SSLv3 ciphers (for security auditing purposes).
 - **🔐 Cipher Suite Enumeration:**
   - **Strength-Based Sorting**: Ciphers displayed strongest-first (ECDHE+AES-256+GCM → RC4).
   - **Verbose Mode** (`--verbose`): Shows ALL possible ciphers with status indicators (`✓` enabled, `✗` disabled).
@@ -34,6 +34,11 @@
   - **Time-Agnostic Trust**: Identifies trusted roots even for expired certificates.
   - **SANs Inspection**: Toggleable Subject Alternative Names display.
 - **📦 Private PKI Support:** Use the `--ca-bundle` flag to validate against custom root certificates.
+- **📋 Comprehensive Cipher Database:**
+  - **135+ Cipher Suites**: Complete IANA registry coverage from SSLv2 through TLS 1.3.
+  - **Legacy Protocol Support**: SSLv2/SSLv3 cipher detection for comprehensive security audits.
+  - **Security-First Categorization**: All legacy, NULL, and EXPORT ciphers clearly marked as HIGH RISK.
+  - **Dual Naming**: Both IANA and OpenSSL naming conventions supported for all cipher suites.
 - **🤖 Automation Ready:** Stable `--json` output for CI/CD pipelines.
 - **🚦 Strict Exit Codes for CI/CD:** 
   - **Exit Code 0**: Scan completed successfully, no issues/violations found.

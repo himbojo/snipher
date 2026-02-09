@@ -115,7 +115,7 @@ def configure_context(args, context):
 def main():
     parser = argparse.ArgumentParser(description="Python TLS Test Server")
     parser.add_argument("--port", type=int, default=4443, help="Port to listen on")
-    parser.add_argument("--protocol", choices=["TLSv1.3", "TLSv1.2", "TLSv1.1", "TLSv1.0", "SSLv3", "SSLv2", "ALL"], default="ALL", help="TLS Version to force")
+    parser.add_argument("--protocol", choices=["TLSv1.3", "TLSv1.2", "TLSv1.1", "TLSv1.0", "SSLv3", "SSLv2"], required=True, help="TLS Version to force")
     parser.add_argument("--cipher", type=str, help="Cipher suite string (OpenSSL format or IANA name)")
     
     args = parser.parse_args()
